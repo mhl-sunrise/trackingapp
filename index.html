@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#0E1116" />
+<title>Beacon</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+
+<style>
+  :root {
+    --signal: #ec0f69;        /* you — live beacon */
+    --signal-soft: rgba(236, 15, 105, 0.18);
+    --chrome: #0e1116;        /* floating panels */
+    --chrome-2: #161b22;
+    --line: rgba(255, 255, 255, 0.10);
+    --slate: #334155;         /* other people */
+    --paper: #ffffff;
+    --muted: #8a93a0;
+    --mono: ui-monospace, "SF Mono", "Roboto Mono", "Cascadia Code", "Liberation Mono", monospace;
+    --ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    font-family: var(--ui);
+    background: #e7e9ec;
+  }
+
+  #map {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: #e7e9ec;
+  }
+
+  /* ---------- top HUD ---------- */
+  .hud {
+    position: absolute;
+    z-index: 1000;
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    left: 12px;
+    right: 12px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    pointer-events: none;
+  }
+  .hud > * { pointer-events: auto; }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 38px;
+    padding: 0 14px 0 12px;
+    background: var(--chrome);
+    color: #fff;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    letter-spacing: 0.01em;
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.22);
+    cursor: pointer;
+    max-width: calc(100% - 60px);
+  }
+  .chip .live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--signal);
+    flex: none;
+    box-shadow: 0 0 0 4px var(--signal-soft);
+  }
+  .chip .who {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .chip .who b { font-weight: 600; }
+  .chip .edit { opacity: 0.5; flex: none; margin-left: 2px; }
+  .chip.unset .who { color: var(--muted); }
+
+  .icon-btn {
+    width: 42px;
+    height: 42px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    background: var(--chrome);
+    color: #fff;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.22);
+    cursor: pointer;
+  }
+  .icon-btn svg { width: 19px; height: 19px; }
+  .icon-btn.spinning svg { animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- setup banner ---------- */
+  .banner {
+    position: absolute;
+    z-index: 1000;
+    top: calc(env(safe-area-inset-top, 0px) + 62px);
+    left: 12px;
+    right: 12px;
+    background: #2a1116;
+    border: 1px solid rgba(236, 15, 105, 0.4);
+    color: #ffd9e5;
+    border-radius: 14px;
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.5;
+    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.25);
+    display: none;
+  }
+  .banner code {
+    font-family: var(--mono);
+    background: rgba(255, 255, 255, 0.08);
+    padding: 1px 5px;
+    border-radius: 5px;
+    font-size: 12px;
+  }
+
+  /* ---------- bottom action ---------- */
+  .dock {
+    position: absolute;
+    z-index: 1000;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 16px 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    pointer-events: none;
+    background: linear-gradient(to top, rgba(231, 233, 236, 0.92), rgba(231, 233, 236, 0));
+  }
+  .dock > * { pointer-events: auto; }
+
+  .toast {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: #fff;
+    background: var(--chrome);
+    border: 1px solid var(--line);
+    padding: 8px 14px;
+    border-radius: 999px;
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.22);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    max-width: 92%;
+    text-align: center;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.error { background: #3a1118; border-color: rgba(236, 15, 105, 0.5); color: #ffd9e5; }
+
+  .beacon {
+    position: relative;
+    width: 100%;
+    max-width: 440px;
+    height: 60px;
+    border: none;
+    border-radius: 18px;
+    background: var(--signal);
+    color: #fff;
+    font-family: var(--ui);
+    font-size: 16.5px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 11px;
+    cursor: pointer;
+    box-shadow: 0 10px 30px rgba(236, 15, 105, 0.38);
+    overflow: hidden;
+    transition: transform 0.12s ease, opacity 0.2s ease;
+  }
+  .beacon:active { transform: scale(0.985); }
+  .beacon:disabled { opacity: 0.85; cursor: default; }
+  .beacon .core {
+    position: relative;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: #fff;
+    flex: none;
+  }
+  .beacon .core::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    animation: ping 1.9s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+  @keyframes ping {
+    0%   { transform: scale(0.7); opacity: 0.8; }
+    80%  { opacity: 0; }
+    100% { transform: scale(2.4); opacity: 0; }
+  }
+  .beacon .mini-spin {
+    width: 16px; height: 16px; flex: none;
+    border: 2.5px solid rgba(255, 255, 255, 0.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+  .beacon.busy .core { display: none; }
+  .beacon.busy .mini-spin { display: block; }
+
+  /* ---------- name sheet ---------- */
+  .scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 2000;
+    background: rgba(8, 10, 13, 0.55);
+    backdrop-filter: blur(2px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease;
+  }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+
+  .sheet {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    z-index: 2001;
+    background: var(--chrome);
+    border-top-left-radius: 22px;
+    border-top-right-radius: 22px;
+    padding: 10px 22px calc(env(safe-area-inset-bottom, 0px) + 24px);
+    transform: translateY(110%);
+    transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4);
+    color: #fff;
+  }
+  .sheet.open { transform: translateY(0); }
+  .sheet .grip {
+    width: 40px; height: 4px; border-radius: 2px;
+    background: rgba(255, 255, 255, 0.18);
+    margin: 0 auto 18px;
+  }
+  .sheet h2 {
+    margin: 0 0 6px;
+    font-size: 21px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .sheet p {
+    margin: 0 0 18px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+  .sheet input {
+    width: 100%;
+    height: 54px;
+    background: var(--chrome-2);
+    border: 1.5px solid var(--line);
+    border-radius: 14px;
+    color: #fff;
+    font-family: var(--mono);
+    font-size: 17px;
+    padding: 0 16px;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+  .sheet input:focus { border-color: var(--signal); }
+  .sheet .err {
+    color: #ff8fb4;
+    font-size: 12.5px;
+    margin: 8px 2px 0;
+    min-height: 16px;
+  }
+  .sheet .confirm {
+    width: 100%;
+    height: 54px;
+    margin-top: 6px;
+    border: none;
+    border-radius: 14px;
+    background: var(--signal);
+    color: #fff;
+    font-family: var(--ui);
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .sheet .confirm:active { transform: scale(0.99); }
+
+  /* ---------- markers ---------- */
+  .pin { position: relative; }
+  .pin .dot {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--slate);
+    border: 2.5px solid #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  }
+  .pin.me .dot { background: var(--signal); }
+  .pin.me .ring {
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 16px; height: 16px;
+    margin: -8px 0 0 -8px;
+    border-radius: 50%;
+    border: 2px solid var(--signal);
+    animation: ping 2.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  .leaflet-tooltip.tag {
+    background: var(--chrome);
+    border: 1px solid var(--line);
+    color: #fff;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 7px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+    white-space: nowrap;
+  }
+  .leaflet-tooltip.tag::before { display: none; }
+  .leaflet-tooltip.tag.tag-me { color: #ffb3cf; border-color: rgba(236, 15, 105, 0.5); }
+
+  .leaflet-popup-content-wrapper {
+    background: var(--chrome);
+    color: #fff;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  }
+  .leaflet-popup-tip { background: var(--chrome); }
+  .leaflet-popup-content { margin: 12px 14px; font-family: var(--ui); }
+  .pop-name { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+  .pop-name.me { color: var(--signal); }
+  .pop-row {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .pop-row span { color: #d4d9df; }
+
+  .leaflet-control-attribution {
+    font-size: 9px;
+    background: rgba(255, 255, 255, 0.7) !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .beacon .core::after,
+    .pin.me .ring,
+    .icon-btn.spinning svg,
+    .beacon .mini-spin { animation: none; }
+    .pin.me .ring { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div class="hud">
+  <button class="chip unset" id="nameChip" aria-label="Set or change your name">
+    <span class="live-dot"></span>
+    <span class="who" id="whoLabel">tap to set your name</span>
+    <span class="edit">✎</span>
+  </button>
+  <button class="icon-btn" id="refreshBtn" aria-label="Refresh map">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>
+    </svg>
+  </button>
+</div>
+
+<div class="banner" id="setupBanner">
+  Add your Supabase <code>anon</code> key inside this file (the <code>SUPABASE_ANON_KEY</code> line) to start logging. The map works, but saving is disabled until then.
+</div>
+
+<div class="dock">
+  <div class="toast" id="toast"></div>
+  <button class="beacon" id="logBtn">
+    <span class="core"></span>
+    <span class="mini-spin"></span>
+    <span id="logLabel">Log my location</span>
+  </button>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet">
+  <div class="grip"></div>
+  <h2 id="sheetTitle">What's your name?</h2>
+  <p id="sheetHelp">This tags your spot on the map and becomes your fixed ID. Every time you log, it updates the same entry.</p>
+  <input id="nameInput" type="text" inputmode="text" autocomplete="off" autocapitalize="off"
+         placeholder="e.g. martin" maxlength="40" />
+  <div class="err" id="nameErr"></div>
+  <button class="confirm" id="nameConfirm">Start sharing</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+/* ============================================================
+   CONFIG  —  edit these two lines
+   ============================================================ */
+const SUPABASE_URL = "https://qqgeykgjmhgogcxosnwz.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxZ2V5a2dqbWhnb2djeG9zbnd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyNjI4NjcsImV4cCI6MjA5NzgzODg2N30.Pzuza33yvcyXN_p7X6AS4r582AS88TOS2eR42P3Ua9Y";   // anon public
+
+const TABLE = "locations";
+const REFRESH_MS = 20000;   // auto-refresh every 20s
+/* ============================================================ */
+
+const NAME_KEY = "beacon_name";
+let memName = null;                 // in-memory fallback if storage is blocked
+const configured = SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== "PASTE_YOUR_ANON_KEY_HERE";
+const sb = configured ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+// True when running inside an embedded frame (e.g. a published artifact),
+// where GPS and external tiles are usually blocked by the host.
+let inIframe = false;
+try { inIframe = window.self !== window.top; } catch (e) { inIframe = true; }
+
+
+/* ---------- name storage (with fallback) ---------- */
+function getName() {
+  try { return localStorage.getItem(NAME_KEY) || memName; }
+  catch { return memName; }
+}
+function setName(n) {
+  memName = n;
+  try { localStorage.setItem(NAME_KEY, n); } catch {}
+  paintChip();
+}
+function paintChip() {
+  const n = getName();
+  const chip = document.getElementById("nameChip");
+  const label = document.getElementById("whoLabel");
+  if (n) {
+    chip.classList.remove("unset");
+    label.innerHTML = "logging as <b>" + escapeHtml(n) + "</b>";
+  } else {
+    chip.classList.add("unset");
+    label.textContent = "tap to set your name";
+  }
+}
+
+/* ---------- map ---------- */
+const map = L.map("map", { zoomControl: false, attributionControl: true })
+  .setView([48.15, 17.11], 6);   // Central Europe default
+
+const tiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+  subdomains: "abcd",
+  maxZoom: 19,
+  attribution: '&copy; OpenStreetMap &copy; CARTO',
+}).addTo(map);
+
+let tileWarned = false;
+tiles.on("tileerror", () => {
+  if (tileWarned) return;
+  tileWarned = true;
+  toast("Map tiles are blocked in this view. They'll load on a hosted page.", true);
+});
+L.control.zoom({ position: "bottomright" }).addTo(map);
+
+let markers = {};   // name -> L.marker
+
+function meIcon() {
+  return L.divIcon({ className: "", iconSize: [16, 16], iconAnchor: [8, 8],
+    html: '<div class="pin me"><span class="ring"></span><span class="dot"></span></div>' });
+}
+function otherIcon() {
+  return L.divIcon({ className: "", iconSize: [16, 16], iconAnchor: [8, 8],
+    html: '<div class="pin"><span class="dot"></span></div>' });
+}
+
+function relTime(ts) {
+  if (!ts) return "unknown";
+  const s = Math.round((Date.now() - new Date(ts).getTime()) / 1000);
+  if (s < 60) return s + "s ago";
+  if (s < 3600) return Math.floor(s / 60) + "m ago";
+  if (s < 86400) return Math.floor(s / 3600) + "h ago";
+  return Math.floor(s / 86400) + "d ago";
+}
+
+function renderMarkers(rows) {
+  const me = getName();
+  const seen = new Set();
+  let bounds = [];
+
+  rows.forEach(r => {
+    if (typeof r.latitude !== "number" || typeof r.longitude !== "number") return;
+    seen.add(r.name);
+    const isMe = me && r.name === me;
+    const ll = [r.latitude, r.longitude];
+    bounds.push(ll);
+
+    const popup =
+      '<div class="pop-name ' + (isMe ? "me" : "") + '">' + escapeHtml(r.name) + (isMe ? " (you)" : "") + "</div>" +
+      '<div class="pop-row">lat <span>' + r.latitude.toFixed(5) + "</span><br>" +
+      "lng <span>" + r.longitude.toFixed(5) + "</span><br>" +
+      "seen <span>" + relTime(r.recorded_at) + "</span></div>";
+
+    if (markers[r.name]) {
+      markers[r.name].setLatLng(ll).setIcon(isMe ? meIcon() : otherIcon());
+      markers[r.name].getPopup() && markers[r.name].setPopupContent(popup);
+    } else {
+      const m = L.marker(ll, { icon: isMe ? meIcon() : otherIcon() }).addTo(map);
+      m.bindTooltip(r.name, { permanent: true, direction: "top", offset: [0, -10],
+        className: "tag" + (isMe ? " tag-me" : "") });
+      m.bindPopup(popup);
+      markers[r.name] = m;
+    }
+  });
+
+  // drop markers that no longer exist
+  Object.keys(markers).forEach(name => {
+    if (!seen.has(name)) { map.removeLayer(markers[name]); delete markers[name]; }
+  });
+
+  return bounds;
+}
+
+let didFit = false;
+async function refresh(fit = false) {
+  if (!sb) return;
+  const { data, error } = await sb.from(TABLE).select("name, latitude, longitude, recorded_at");
+  if (error) { toast("Couldn't load locations. Check your connection.", true); return; }
+  const bounds = renderMarkers(data || []);
+  if ((fit || !didFit) && bounds.length) {
+    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 });
+    didFit = true;
+  }
+}
+
+/* ---------- logging ---------- */
+let pendingLog = false;
+
+function logLocation() {
+  const name = getName();
+  if (!name) { openSheet(false); pendingLog = true; return; }
+  if (!sb) { document.getElementById("setupBanner").style.display = "block"; return; }
+  if (!navigator.geolocation) { toast("This device can't share location.", true); return; }
+
+  setBusy(true, "Locating…");
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const { latitude, longitude } = pos.coords;
+    setBusy(true, "Saving…");
+    const { error } = await sb.from(TABLE).upsert(
+      { name, latitude, longitude, recorded_at: new Date().toISOString() },
+      { onConflict: "name" }
+    );
+    setBusy(false);
+    if (error) { toast("Save failed. Check your table's access rules.", true); return; }
+    await refresh();
+    map.flyTo([latitude, longitude], 16, { duration: 0.8 });
+    toast("Location saved");
+  }, err => {
+    setBusy(false);
+    if (err.code === 1) toast(inIframe
+      ? "Location is blocked in this embedded view. Open the page at its own URL to share your spot."
+      : "Location is off. Enable it in your browser settings.", true);
+    else if (err.code === 3) toast("Location timed out. Try again.", true);
+    else toast("Couldn't get your location.", true);
+  }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
+}
+
+function setBusy(busy, label) {
+  const btn = document.getElementById("logBtn");
+  const lbl = document.getElementById("logLabel");
+  btn.classList.toggle("busy", busy);
+  btn.disabled = busy;
+  lbl.textContent = busy ? label : "Log my location";
+}
+
+/* ---------- name sheet ---------- */
+function openSheet(editing) {
+  const input = document.getElementById("nameInput");
+  input.value = getName() || "";
+  document.getElementById("nameErr").textContent = "";
+  document.getElementById("sheetTitle").textContent = editing ? "Change your name" : "What's your name?";
+  document.getElementById("sheetHelp").textContent = editing
+    ? "Heads up: a new name creates a separate entry on the map — your old one stays put."
+    : "This tags your spot on the map and becomes your fixed ID. Every time you log, it updates the same entry.";
+  document.getElementById("nameConfirm").textContent = editing ? "Save name" : "Start sharing";
+  document.getElementById("scrim").classList.add("open");
+  document.getElementById("sheet").classList.add("open");
+  setTimeout(() => input.focus(), 280);
+}
+function closeSheet() {
+  document.getElementById("scrim").classList.remove("open");
+  document.getElementById("sheet").classList.remove("open");
+  document.getElementById("nameInput").blur();
+}
+function confirmName() {
+  const v = document.getElementById("nameInput").value.trim();
+  if (!v) { document.getElementById("nameErr").textContent = "Enter a name to continue."; return; }
+  setName(v);
+  closeSheet();
+  refresh(true);
+  if (pendingLog) { pendingLog = false; setTimeout(logLocation, 320); }
+}
+
+/* ---------- toast ---------- */
+let toastTimer;
+function toast(msg, isError) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.toggle("error", !!isError);
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 3200);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/* ---------- wire up ---------- */
+document.getElementById("logBtn").addEventListener("click", logLocation);
+document.getElementById("nameChip").addEventListener("click", () => openSheet(!!getName()));
+document.getElementById("nameConfirm").addEventListener("click", confirmName);
+document.getElementById("nameInput").addEventListener("keydown", e => { if (e.key === "Enter") confirmName(); });
+document.getElementById("scrim").addEventListener("click", closeSheet);
+document.getElementById("refreshBtn").addEventListener("click", () => {
+  const b = document.getElementById("refreshBtn");
+  b.classList.add("spinning");
+  refresh(true).finally(() => setTimeout(() => b.classList.remove("spinning"), 600));
+});
+
+/* ---------- init ---------- */
+paintChip();
+if (!configured) document.getElementById("setupBanner").style.display = "block";
+refresh(true);
+setInterval(() => refresh(false), REFRESH_MS);
+</script>
+</body>
+</html>
