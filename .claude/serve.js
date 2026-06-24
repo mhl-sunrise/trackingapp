@@ -3,7 +3,16 @@ const fs = require("fs");
 const path = require("path");
 
 const root = path.join(__dirname, "..");
-const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
+const types = {
+  ".html": "text/html",
+  ".js": "text/javascript",
+  ".css": "text/css",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".json": "application/json",
+  ".webmanifest": "application/manifest+json",
+};
 
 http.createServer((req, res) => {
   let p = req.url.split("?")[0];
