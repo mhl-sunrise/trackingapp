@@ -311,6 +311,12 @@
     cursor: pointer;
   }
   .sheet .confirm:active { transform: scale(0.99); }
+  .sheet .confirm.ghost {
+    background: transparent;
+    border: 1.5px solid var(--line);
+    color: #fff;
+    margin-top: 10px;
+  }
 
   /* ---------- channel sheet ---------- */
   .chan-field {
@@ -558,6 +564,14 @@
   <button class="confirm" id="nameConfirm">Start sharing</button>
 </div>
 
+<div class="sheet" id="welcomeSheet">
+  <div class="grip"></div>
+  <h2>Pick a channel</h2>
+  <p>A channel is a private space for a group's pins and alerts. Start your own and share the code, or join one someone gave you.</p>
+  <button class="confirm" id="startNewBtn">Start a new channel</button>
+  <button class="confirm ghost" id="joinBtn">Join with a code</button>
+</div>
+
 <div class="sheet" id="channelSheet">
   <div class="grip"></div>
   <h2>Notification channel</h2>
@@ -609,8 +623,10 @@ const CHANNEL_PREFIX = "location-channel-";    // every channel topic starts wit
 
 const NAME_KEY = "beacon_name";
 const CHANNEL_KEY = "beacon_channel";
+const ONBOARDED_KEY = "beacon_onboarded";
 let memName = null;                 // in-memory fallback if storage is blocked
 let memChannel = null;              // ...same for the channel code
+let memOnboarded = false;           // ...same for the first-run onboarding flag
 const configured = SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== "PASTE_YOUR_ANON_KEY_HERE";
 const sb = configured ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
@@ -676,6 +692,16 @@ function ntfyUrl() { return NTFY_SERVER.replace(/\/+$/, "") + "/" + ntfyTopic();
 function paintChannel() {
   const btn = document.getElementById("channelBtn");
   if (btn) btn.title = "Channel: " + ntfyTopic();
+}
+
+/* ---------- onboarding flag (shown once) ---------- */
+function isOnboarded() {
+  try { return !!localStorage.getItem(ONBOARDED_KEY) || memOnboarded; }
+  catch { return memOnboarded; }
+}
+function setOnboarded() {
+  memOnboarded = true;
+  try { localStorage.setItem(ONBOARDED_KEY, "1"); } catch {}
 }
 
 /* ---------- map ---------- */
@@ -971,8 +997,26 @@ function closeSheet() {
   document.getElementById("scrim").classList.remove("open");
   document.getElementById("sheet").classList.remove("open");
   document.getElementById("channelSheet").classList.remove("open");
+  document.getElementById("welcomeSheet").classList.remove("open");
   document.getElementById("nameInput").blur();
   document.getElementById("channelInput").blur();
+}
+
+/* ---------- first-run onboarding ---------- */
+// Brand-new users are asked to start their own channel (the random one we just
+// generated) or join an existing one by code. Shown only once.
+function openWelcomeSheet() {
+  setOnboarded();
+  document.getElementById("scrim").classList.add("open");
+  document.getElementById("welcomeSheet").classList.add("open");
+}
+function startNewChannel() {
+  closeSheet();
+  openChannelSheet();          // reveal your auto-created code + how to get alerts
+}
+function joinChannel() {
+  closeSheet();
+  openChannelSheet(true);      // empty field to type the code you were given
 }
 function confirmName() {
   const v = document.getElementById("nameInput").value.trim();
@@ -984,9 +1028,9 @@ function confirmName() {
 }
 
 /* ---------- channel sheet ---------- */
-function openChannelSheet() {
+function openChannelSheet(startEmpty) {
   const input = document.getElementById("channelInput");
-  input.value = getChannel() || "";
+  input.value = startEmpty ? "" : (getChannel() || "");
   document.getElementById("channelErr").textContent = "";
   renderChannelPreview();
   document.getElementById("scrim").classList.add("open");
@@ -1062,7 +1106,9 @@ document.addEventListener("click", e => {
   const btn = e.target.closest && e.target.closest(".pop-del");
   if (btn) armOrDelete(btn);
 });
-document.getElementById("channelBtn").addEventListener("click", openChannelSheet);
+document.getElementById("channelBtn").addEventListener("click", () => openChannelSheet());
+document.getElementById("startNewBtn").addEventListener("click", startNewChannel);
+document.getElementById("joinBtn").addEventListener("click", joinChannel);
 document.getElementById("channelConfirm").addEventListener("click", confirmChannel);
 document.getElementById("channelInput").addEventListener("input", renderChannelPreview);
 document.getElementById("channelInput").addEventListener("keydown", e => { if (e.key === "Enter") confirmChannel(); });
@@ -1074,10 +1120,13 @@ document.getElementById("refreshBtn").addEventListener("click", () => {
 });
 
 /* ---------- init ---------- */
+const firstRun = !getChannel();     // no channel stored yet → brand-new user
 ensureChannel();
 paintChip();
 paintChannel();
 if (!configured) document.getElementById("setupBanner").style.display = "block";
+if (firstRun && !isOnboarded()) openWelcomeSheet();   // ask: start new or join
+else setOnboarded();                                  // existing users: don't prompt
 refresh(true);
 setInterval(() => refresh(false), REFRESH_MS);
 
