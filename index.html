@@ -62,6 +62,7 @@
     pointer-events: none;
   }
   .hud > * { pointer-events: auto; }
+  .hud-actions { display: flex; gap: 10px; flex: none; }
 
   .chip {
     display: inline-flex;
@@ -78,7 +79,7 @@
     letter-spacing: 0.01em;
     box-shadow: 0 6px 22px rgba(0, 0, 0, 0.22);
     cursor: pointer;
-    max-width: calc(100% - 60px);
+    max-width: calc(100% - 112px);
   }
   .chip .live-dot {
     width: 8px;
@@ -255,6 +256,8 @@
     transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4);
     color: #fff;
+    max-height: 90vh;
+    overflow-y: auto;
   }
   .sheet.open { transform: translateY(0); }
   .sheet .grip {
@@ -308,6 +311,93 @@
     cursor: pointer;
   }
   .sheet .confirm:active { transform: scale(0.99); }
+
+  /* ---------- channel sheet ---------- */
+  .chan-field {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 54px;
+    background: var(--chrome-2);
+    border: 1.5px solid var(--line);
+    border-radius: 14px;
+    padding: 0 14px;
+    transition: border-color 0.15s ease;
+  }
+  .chan-field:focus-within { border-color: var(--signal); }
+  .chan-field .chan-prefix {
+    font-family: var(--mono);
+    font-size: 15px;
+    color: var(--muted);
+    white-space: nowrap;
+    user-select: none;
+  }
+  .chan-field input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    background: none;
+    border: none;
+    color: #fff;
+    font-family: var(--mono);
+    font-size: 15px;
+    padding: 0 0 0 1px;
+    outline: none;
+  }
+  .chan-help {
+    margin: 16px 0 6px;
+    padding: 14px;
+    background: var(--chrome-2);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+  }
+  .chan-help .h {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #d4d9df;
+    margin-bottom: 10px;
+  }
+  .chan-help ol {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--muted);
+  }
+  .chan-help ol a { color: #9dbcff; }
+  .chan-topic {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 0;
+  }
+  .chan-topic code {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: #d4d9df;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 8px 10px;
+    border-radius: 8px;
+  }
+  .chan-topic button {
+    flex: none;
+    height: 32px;
+    padding: 0 13px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--signal);
+    color: #fff;
+    font-family: var(--ui);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .chan-topic button:active { transform: scale(0.97); }
 
   /* desktop: centered modal instead of a full-width bottom sheet */
   @media (min-width: 640px) {
@@ -413,11 +503,18 @@
     <span class="who" id="whoLabel">tap to set your name</span>
     <span class="edit">✎</span>
   </button>
-  <button class="icon-btn" id="refreshBtn" aria-label="Refresh map">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>
-    </svg>
-  </button>
+  <div class="hud-actions">
+    <button class="icon-btn" id="channelBtn" aria-label="Notification channel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="currentColor" stroke="none"/>
+      </svg>
+    </button>
+    <button class="icon-btn" id="refreshBtn" aria-label="Refresh map">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>
+      </svg>
+    </button>
+  </div>
 </div>
 
 <div class="banner" id="setupBanner">
@@ -444,6 +541,35 @@
   <button class="confirm" id="nameConfirm">Start sharing</button>
 </div>
 
+<div class="sheet" id="channelSheet">
+  <div class="grip"></div>
+  <h2>Notification channel</h2>
+  <p>Everyone who shares a channel gets a phone alert the moment someone in it logs a location. Pick any code — make it your group's shared word, or keep it private to just you.</p>
+  <div class="chan-field">
+    <span class="chan-prefix">location-channel-</span>
+    <input id="channelInput" type="text" inputmode="text" autocomplete="off" autocapitalize="off"
+           spellcheck="false" placeholder="your-code" maxlength="32" />
+  </div>
+  <div class="err" id="channelErr"></div>
+
+  <div class="chan-help">
+    <div class="h">Get the alerts on your phone</div>
+    <ol>
+      <li>Install the free <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a> app (iOS / Android), or use any browser.</li>
+      <li>Subscribe to this exact topic:</li>
+    </ol>
+    <div class="chan-topic">
+      <code id="chanTopicCode">location-channel-…</code>
+      <button id="chanCopyBtn" type="button">Copy</button>
+    </div>
+    <ol start="3">
+      <li><a id="chanTopicLink" href="https://ntfy.sh" target="_blank" rel="noopener">Open it on ntfy.sh ↗</a> to test — you'll get a push on every new log in this channel.</li>
+    </ol>
+  </div>
+
+  <button class="confirm" id="channelConfirm">Save channel</button>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
@@ -456,11 +582,18 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const TABLE = "locations";
 const REFRESH_MS = 20000;   // auto-refresh every 20s
-const NTFY_TOPIC = "https://ntfy.sh/mhlocations";   // push notification on each new log
+
+// Notifications are grouped into "channels". The push topic is always
+// CHANNEL_PREFIX + the user's own code, e.g. location-channel-myteam.
+// Anyone subscribed to that topic in ntfy gets an alert on each new log.
+const NTFY_SERVER = "https://ntfy.sh";        // push server — works with any ntfy instance
+const CHANNEL_PREFIX = "location-channel-";    // every channel topic starts with this
 /* ============================================================ */
 
 const NAME_KEY = "beacon_name";
+const CHANNEL_KEY = "beacon_channel";
 let memName = null;                 // in-memory fallback if storage is blocked
+let memChannel = null;              // ...same for the channel code
 const configured = SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== "PASTE_YOUR_ANON_KEY_HERE";
 const sb = configured ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
@@ -491,6 +624,41 @@ function paintChip() {
     chip.classList.add("unset");
     label.textContent = "tap to set your name";
   }
+}
+
+/* ---------- channel storage (with fallback) ---------- */
+function getChannel() {
+  try { return localStorage.getItem(CHANNEL_KEY) || memChannel; }
+  catch { return memChannel; }
+}
+function setChannel(c) {
+  memChannel = c;
+  try { localStorage.setItem(CHANNEL_KEY, c); } catch {}
+  paintChannel();
+}
+// On first ever run, give this device a random channel so notifications work
+// immediately and stay isolated from other groups. The user can change it.
+function ensureChannel() {
+  if (!getChannel()) setChannel(randomSuffix());
+}
+function randomSuffix(len = 6) {
+  const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let s = "";
+  for (let i = 0; i < len; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return s;
+}
+// Normalise a user-typed code into a valid ntfy topic suffix. Tolerates a
+// pasted full topic ("location-channel-foo") and strips illegal characters.
+function cleanSuffix(v) {
+  v = String(v).trim().toLowerCase();
+  if (v.startsWith(CHANNEL_PREFIX)) v = v.slice(CHANNEL_PREFIX.length);
+  return v.replace(/[^a-z0-9_-]/g, "").replace(/^[-_]+|[-_]+$/g, "").slice(0, 32);
+}
+function ntfyTopic() { return CHANNEL_PREFIX + (getChannel() || ""); }
+function ntfyUrl() { return NTFY_SERVER.replace(/\/+$/, "") + "/" + ntfyTopic(); }
+function paintChannel() {
+  const btn = document.getElementById("channelBtn");
+  if (btn) btn.title = "Channel: " + ntfyTopic();
 }
 
 /* ---------- map ---------- */
@@ -664,10 +832,10 @@ function isMissingColumn(error, col) {
   return error.code === "PGRST204" || (msg.includes(col) && (msg.includes("column") || msg.includes("schema cache")));
 }
 
-// Fire-and-forget push to the ntfy topic. Never blocks or fails the save.
+// Fire-and-forget push to this device's channel topic. Never blocks the save.
 function notifyNtfy(name) {
   try {
-    fetch(NTFY_TOPIC, { method: "POST", body: name + " has just logged new location" }).catch(() => {});
+    fetch(ntfyUrl(), { method: "POST", body: name + " has just logged new location" }).catch(() => {});
   } catch (e) {}
 }
 
@@ -725,7 +893,9 @@ function openSheet(editing) {
 function closeSheet() {
   document.getElementById("scrim").classList.remove("open");
   document.getElementById("sheet").classList.remove("open");
+  document.getElementById("channelSheet").classList.remove("open");
   document.getElementById("nameInput").blur();
+  document.getElementById("channelInput").blur();
 }
 function confirmName() {
   const v = document.getElementById("nameInput").value.trim();
@@ -734,6 +904,57 @@ function confirmName() {
   closeSheet();
   refresh(true);
   if (pendingLog) { pendingLog = false; setTimeout(logLocation, 320); }
+}
+
+/* ---------- channel sheet ---------- */
+function openChannelSheet() {
+  const input = document.getElementById("channelInput");
+  input.value = getChannel() || "";
+  document.getElementById("channelErr").textContent = "";
+  renderChannelPreview();
+  document.getElementById("scrim").classList.add("open");
+  document.getElementById("channelSheet").classList.add("open");
+  setTimeout(() => input.focus(), 280);
+}
+// Live-update the topic + test link as the user types their code.
+function renderChannelPreview() {
+  const suffix = cleanSuffix(document.getElementById("channelInput").value) || "…";
+  const topic = CHANNEL_PREFIX + suffix;
+  document.getElementById("chanTopicCode").textContent = topic;
+  document.getElementById("chanTopicLink").href =
+    NTFY_SERVER.replace(/\/+$/, "") + "/" + topic;
+}
+function confirmChannel() {
+  const v = cleanSuffix(document.getElementById("channelInput").value);
+  if (!v) {
+    document.getElementById("channelErr").textContent = "Enter a code (letters, numbers, - or _).";
+    return;
+  }
+  setChannel(v);
+  closeSheet();
+  toast("Channel set: " + CHANNEL_PREFIX + v);
+}
+function copyChannelTopic() {
+  const topic = CHANNEL_PREFIX + (cleanSuffix(document.getElementById("channelInput").value) || getChannel() || "");
+  const done = () => toast("Topic copied — paste it into the ntfy app");
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(topic).then(done).catch(() => fallbackCopy(topic, done));
+  } else {
+    fallbackCopy(topic, done);
+  }
+}
+function fallbackCopy(text, done) {
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    done();
+  } catch { toast("Couldn't copy — long-press the topic to copy it.", true); }
 }
 
 /* ---------- toast ---------- */
@@ -758,6 +979,11 @@ document.getElementById("nameChip").addEventListener("click", () => openSheet(!!
 document.getElementById("nameConfirm").addEventListener("click", confirmName);
 document.getElementById("nameInput").addEventListener("keydown", e => { if (e.key === "Enter") confirmName(); });
 document.getElementById("scrim").addEventListener("click", closeSheet);
+document.getElementById("channelBtn").addEventListener("click", openChannelSheet);
+document.getElementById("channelConfirm").addEventListener("click", confirmChannel);
+document.getElementById("channelInput").addEventListener("input", renderChannelPreview);
+document.getElementById("channelInput").addEventListener("keydown", e => { if (e.key === "Enter") confirmChannel(); });
+document.getElementById("chanCopyBtn").addEventListener("click", copyChannelTopic);
 document.getElementById("refreshBtn").addEventListener("click", () => {
   const b = document.getElementById("refreshBtn");
   b.classList.add("spinning");
@@ -765,7 +991,9 @@ document.getElementById("refreshBtn").addEventListener("click", () => {
 });
 
 /* ---------- init ---------- */
+ensureChannel();
 paintChip();
+paintChannel();
 if (!configured) document.getElementById("setupBanner").style.display = "block";
 refresh(true);
 setInterval(() => refresh(false), REFRESH_MS);
