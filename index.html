@@ -480,6 +480,25 @@
     cursor: pointer;
   }
   .chan-join-btn:active { transform: scale(0.98); }
+  .cc-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    font-weight: 700;
+    color: var(--muted);
+    margin: 16px 2px 8px;
+  }
+  .cc-hint {
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--muted);
+    margin: 9px 2px 4px;
+  }
+  .chan-new {
+    width: 100%;
+    justify-content: center;
+    margin-top: 4px;
+  }
 
   /* desktop: centered modal instead of a full-width bottom sheet */
   @media (min-width: 640px) {
@@ -654,34 +673,40 @@
 
 <div class="sheet" id="channelSheet">
   <div class="grip"></div>
-  <h2>Channels</h2>
-  <p>Tap a channel to switch to it. Share its code so others can join you on the map and in alerts.</p>
+  <h2>Your channel</h2>
+  <p>A channel is your private group — everyone with the same code shares this map and gets each other's alerts. Nobody can find it unless you give them the code.</p>
 
-  <div class="chan-list" id="chanList"></div>
-  <button class="chan-new" id="chanNewBtn" type="button">+ New channel</button>
+  <div class="cc-label">Your channel code</div>
+  <div class="chan-topic">
+    <code id="chanTopicCode">location-channel-…</code>
+    <button id="chanCopyBtn" type="button">Copy</button>
+  </div>
+  <div class="cc-hint">Send this code to whoever you want on the map with you.</div>
 
+  <div class="chan-switch" id="chanSwitch" hidden>
+    <div class="cc-label">Switch channel</div>
+    <div class="chan-list" id="chanList"></div>
+  </div>
+
+  <button class="chan-new" id="chanNewBtn" type="button">+ Start a fresh channel</button>
+
+  <div class="cc-label">Join someone's channel</div>
   <div class="chan-join">
     <div class="chan-field">
       <span class="chan-prefix">location-channel-</span>
       <input id="channelInput" type="text" inputmode="text" autocomplete="off" autocapitalize="off"
-             spellcheck="false" placeholder="join a code" maxlength="32" />
+             spellcheck="false" placeholder="paste their code" maxlength="32" />
     </div>
     <button class="chan-join-btn" id="channelConfirm" type="button">Join</button>
   </div>
   <div class="err" id="channelErr"></div>
 
   <div class="chan-help">
-    <div class="h">Get alerts on your phone</div>
+    <div class="h">Get these alerts on your phone</div>
     <ol>
       <li>Install the free <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a> app (iOS / Android), or use any browser.</li>
-      <li>Subscribe to your current channel's topic:</li>
-    </ol>
-    <div class="chan-topic">
-      <code id="chanTopicCode">location-channel-…</code>
-      <button id="chanCopyBtn" type="button">Copy</button>
-    </div>
-    <ol start="3">
-      <li><a id="chanTopicLink" href="https://ntfy.sh" target="_blank" rel="noopener">Open it on ntfy.sh ↗</a> to test — you'll get a push on every new log here.</li>
+      <li>In ntfy, subscribe to your code above (tap <b>Copy</b>, then paste it in).</li>
+      <li><a id="chanTopicLink" href="https://ntfy.sh" target="_blank" rel="noopener">Open it on ntfy.sh ↗</a> to test it now.</li>
     </ol>
   </div>
 
@@ -948,9 +973,10 @@ let pendingLog = false;
 // A single getCurrentPosition returns the first fix available — often a coarse
 // network/Wi-Fi estimate delivered before the GPS receiver has locked. We instead
 // watch the position and keep the tightest fix, letting it converge.
-const ACCURACY_TARGET_M = 8;      // stop early once a fix is at least this good
-const SAMPLE_WINDOW_MS  = 20000;  // otherwise keep refining up to this long
-const SETTLE_MS         = 5000;   // ...but stop early if it stops improving for this long
+const ACCURACY_TARGET_M = 10;     // stop early once a fix is at least this good
+const SAMPLE_WINDOW_MS  = 30000;  // otherwise keep refining up to this long (GPS cold-start is slow)
+const SETTLE_MS         = 6000;   // stop early if it stops improving for this long...
+const SETTLE_GOOD_M     = 30;     // ...but only once we actually have a usable GPS-grade fix
 
 function getBestPosition(onProgress) {
   return new Promise((resolve, reject) => {
@@ -981,7 +1007,11 @@ function getBestPosition(onProgress) {
 
     hardStop = setTimeout(finish, SAMPLE_WINDOW_MS);
     settleCheck = setInterval(() => {
-      if (best && Date.now() - lastImprove > SETTLE_MS) finish();  // converged
+      // Don't bail out on the first coarse Wi-Fi/network fix — keep waiting for the
+      // GPS chip to lock. Only settle early once we have a genuinely tight fix that
+      // has stopped improving.
+      const acc = best ? (best.coords.accuracy ?? Infinity) : Infinity;
+      if (best && acc <= SETTLE_GOOD_M && Date.now() - lastImprove > SETTLE_MS) finish();
     }, 1000);
   });
 }
@@ -1031,7 +1061,10 @@ function logLocation() {
       notifyNtfy(name);
       await refresh();
       map.flyTo([latitude, longitude], 17, { duration: 0.8 });
-      toast("Location saved ±" + Math.round(accuracy) + " m");
+      const acc = Math.round(accuracy);
+      toast(acc > 50
+        ? "Saved ±" + acc + " m — turn on Precise Location and try outdoors for a tighter fix."
+        : "Location saved ±" + acc + " m");
     })
     .catch(err => {
       setBusy(false);
@@ -1160,9 +1193,13 @@ function openChannelSheet(focusInput) {
 // carry an × to forget them.
 function renderChannelList() {
   const list = document.getElementById("chanList");
+  const channels = getChannels();
+  // New users have only their own channel — hide the switcher entirely so there's
+  // never a browsable list of channels to join.
+  document.getElementById("chanSwitch").hidden = channels.length <= 1;
   const cur = getChannel();
   list.innerHTML = "";
-  getChannels().forEach(code => {
+  channels.forEach(code => {
     const active = code === cur;
     const chip = document.createElement("button");
     chip.type = "button";
