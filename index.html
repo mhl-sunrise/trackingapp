@@ -737,7 +737,7 @@ function paintChip() {
   const label = document.getElementById("whoLabel");
   if (n) {
     chip.classList.remove("unset");
-    label.innerHTML = "logging as <b>" + escapeHtml(n) + "</b>";
+    label.innerHTML = "<b>" + escapeHtml(n) + "</b>";
   } else {
     chip.classList.add("unset");
     label.textContent = "tap to set your name";
