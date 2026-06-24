@@ -405,6 +405,82 @@
   }
   .chan-topic button:active { transform: scale(0.97); }
 
+  /* channel switcher */
+  .chan-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .chan-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 6px 0 13px;
+    border-radius: 999px;
+    border: 1.5px solid var(--line);
+    background: var(--chrome-2);
+    color: #d4d9df;
+    font-family: var(--mono);
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+  }
+  .chan-chip.active {
+    padding: 0 13px;
+    border-color: var(--signal);
+    background: var(--signal-soft);
+    color: #fff;
+  }
+  .chan-chip .cc-x {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    font-size: 16px;
+    line-height: 1;
+    color: var(--muted);
+  }
+  .chan-chip .cc-x:hover { background: rgba(255, 255, 255, 0.10); color: #fff; }
+  .chan-new {
+    display: inline-flex;
+    align-items: center;
+    height: 34px;
+    padding: 0 15px;
+    margin-bottom: 16px;
+    border-radius: 999px;
+    border: 1.5px dashed var(--line);
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--ui);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.12s ease, color 0.12s ease;
+  }
+  .chan-new:hover { color: #fff; border-color: rgba(255, 255, 255, 0.25); }
+  .chan-join {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .chan-join .chan-field { flex: 1; min-width: 0; }
+  .chan-join-btn {
+    flex: none;
+    padding: 0 18px;
+    border-radius: 14px;
+    border: none;
+    background: var(--signal);
+    color: #fff;
+    font-family: var(--ui);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .chan-join-btn:active { transform: scale(0.98); }
+
   /* desktop: centered modal instead of a full-width bottom sheet */
   @media (min-width: 640px) {
     .sheet {
@@ -574,31 +650,38 @@
 
 <div class="sheet" id="channelSheet">
   <div class="grip"></div>
-  <h2>Notification channel</h2>
-  <p>People who share a channel see each other on the map and get a phone alert whenever someone in it logs. Pick any code — make it your group's shared word, or keep it private to just you.</p>
-  <div class="chan-field">
-    <span class="chan-prefix">location-channel-</span>
-    <input id="channelInput" type="text" inputmode="text" autocomplete="off" autocapitalize="off"
-           spellcheck="false" placeholder="your-code" maxlength="32" />
+  <h2>Channels</h2>
+  <p>Tap a channel to switch to it. Share its code so others can join you on the map and in alerts.</p>
+
+  <div class="chan-list" id="chanList"></div>
+  <button class="chan-new" id="chanNewBtn" type="button">+ New channel</button>
+
+  <div class="chan-join">
+    <div class="chan-field">
+      <span class="chan-prefix">location-channel-</span>
+      <input id="channelInput" type="text" inputmode="text" autocomplete="off" autocapitalize="off"
+             spellcheck="false" placeholder="join a code" maxlength="32" />
+    </div>
+    <button class="chan-join-btn" id="channelConfirm" type="button">Join</button>
   </div>
   <div class="err" id="channelErr"></div>
 
   <div class="chan-help">
-    <div class="h">Get the alerts on your phone</div>
+    <div class="h">Get alerts on your phone</div>
     <ol>
       <li>Install the free <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a> app (iOS / Android), or use any browser.</li>
-      <li>Subscribe to this exact topic:</li>
+      <li>Subscribe to your current channel's topic:</li>
     </ol>
     <div class="chan-topic">
       <code id="chanTopicCode">location-channel-…</code>
       <button id="chanCopyBtn" type="button">Copy</button>
     </div>
     <ol start="3">
-      <li><a id="chanTopicLink" href="https://ntfy.sh" target="_blank" rel="noopener">Open it on ntfy.sh ↗</a> to test — you'll get a push on every new log in this channel.</li>
+      <li><a id="chanTopicLink" href="https://ntfy.sh" target="_blank" rel="noopener">Open it on ntfy.sh ↗</a> to test — you'll get a push on every new log here.</li>
     </ol>
   </div>
 
-  <button class="confirm" id="channelConfirm">Save channel</button>
+  <button class="confirm" id="channelDone">Done</button>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
@@ -623,9 +706,11 @@ const CHANNEL_PREFIX = "location-channel-";    // every channel topic starts wit
 
 const NAME_KEY = "beacon_name";
 const CHANNEL_KEY = "beacon_channel";
+const CHANNELS_KEY = "beacon_channels";
 const ONBOARDED_KEY = "beacon_onboarded";
 let memName = null;                 // in-memory fallback if storage is blocked
 let memChannel = null;              // ...same for the channel code
+let memChannels = null;             // ...same for the list of known channels
 let memOnboarded = false;           // ...same for the first-run onboarding flag
 const configured = SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== "PASTE_YOUR_ANON_KEY_HERE";
 const sb = configured ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
@@ -667,7 +752,36 @@ function getChannel() {
 function setChannel(c) {
   memChannel = c;
   try { localStorage.setItem(CHANNEL_KEY, c); } catch {}
+  registerChannel(c);
   paintChannel();
+}
+
+/* ---------- known-channels list (for quick switching) ---------- */
+function storedChannels() {
+  try { const a = JSON.parse(localStorage.getItem(CHANNELS_KEY) || "[]"); return Array.isArray(a) ? a : []; }
+  catch { return memChannels || []; }
+}
+// Channels to show — the saved ones, with the active one guaranteed up front.
+function getChannels() {
+  const arr = storedChannels().slice();
+  const cur = getChannel();
+  if (cur && !arr.includes(cur)) arr.unshift(cur);
+  return arr;
+}
+function registerChannel(code) {
+  if (!code) return;
+  const arr = storedChannels();
+  if (arr.includes(code)) return;
+  arr.push(code);
+  memChannels = arr;
+  try { localStorage.setItem(CHANNELS_KEY, JSON.stringify(arr)); } catch {}
+}
+function forgetChannel(code) {
+  if (!code || code === getChannel()) return;   // can't forget the channel you're on
+  const arr = storedChannels().filter(c => c !== code);
+  memChannels = arr;
+  try { localStorage.setItem(CHANNELS_KEY, JSON.stringify(arr)); } catch {}
+  renderChannelList();
 }
 // On first ever run, give this device a random channel so notifications work
 // immediately and stay isolated from other groups. The user can change it.
@@ -1028,22 +1142,57 @@ function confirmName() {
 }
 
 /* ---------- channel sheet ---------- */
-function openChannelSheet(startEmpty) {
+function openChannelSheet(focusInput) {
   const input = document.getElementById("channelInput");
-  input.value = startEmpty ? "" : (getChannel() || "");
+  input.value = "";
   document.getElementById("channelErr").textContent = "";
-  renderChannelPreview();
+  renderChannelList();
+  renderChannelHelp();
   document.getElementById("scrim").classList.add("open");
   document.getElementById("channelSheet").classList.add("open");
-  setTimeout(() => input.focus(), 280);
+  if (focusInput) setTimeout(() => input.focus(), 280);
 }
-// Live-update the topic + test link as the user types their code.
-function renderChannelPreview() {
-  const suffix = cleanSuffix(document.getElementById("channelInput").value) || "…";
-  const topic = CHANNEL_PREFIX + suffix;
+// One tappable chip per known channel; the active one is highlighted, the rest
+// carry an × to forget them.
+function renderChannelList() {
+  const list = document.getElementById("chanList");
+  const cur = getChannel();
+  list.innerHTML = "";
+  getChannels().forEach(code => {
+    const active = code === cur;
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chan-chip" + (active ? " active" : "");
+    chip.dataset.code = code;
+    chip.innerHTML = '<span class="cc-name">' + escapeHtml(code) + "</span>" +
+      (active ? "" : '<span class="cc-x" data-x="' + escapeHtml(code) + '">×</span>');
+    list.appendChild(chip);
+  });
+}
+// Show the active channel's topic + subscribe link in the help block.
+function renderChannelHelp() {
+  const topic = CHANNEL_PREFIX + (getChannel() || "");
   document.getElementById("chanTopicCode").textContent = topic;
   document.getElementById("chanTopicLink").href =
     NTFY_SERVER.replace(/\/+$/, "") + "/" + topic;
+}
+function switchChannel(code) {
+  if (!code || code === getChannel()) return;
+  setChannel(code);
+  renderChannelList();
+  renderChannelHelp();
+  refresh(true);
+  toast("Switched to " + CHANNEL_PREFIX + code);
+}
+function newChannel() {
+  const code = randomSuffix();
+  setChannel(code);
+  document.getElementById("channelInput").value = "";
+  document.getElementById("channelErr").textContent = "";
+  renderChannelList();
+  renderChannelHelp();
+  refresh(true);
+  toast("New channel: " + CHANNEL_PREFIX + code);
 }
 function confirmChannel() {
   const v = cleanSuffix(document.getElementById("channelInput").value);
@@ -1052,11 +1201,15 @@ function confirmChannel() {
     return;
   }
   setChannel(v);
-  closeSheet();
-  toast("Channel set: " + CHANNEL_PREFIX + v);
+  document.getElementById("channelInput").value = "";
+  document.getElementById("channelErr").textContent = "";
+  renderChannelList();
+  renderChannelHelp();
+  refresh(true);
+  toast("Joined " + CHANNEL_PREFIX + v);
 }
 function copyChannelTopic() {
-  const topic = CHANNEL_PREFIX + (cleanSuffix(document.getElementById("channelInput").value) || getChannel() || "");
+  const topic = CHANNEL_PREFIX + (getChannel() || "");
   const done = () => toast("Topic copied — paste it into the ntfy app");
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(topic).then(done).catch(() => fallbackCopy(topic, done));
@@ -1110,9 +1263,17 @@ document.getElementById("channelBtn").addEventListener("click", () => openChanne
 document.getElementById("startNewBtn").addEventListener("click", startNewChannel);
 document.getElementById("joinBtn").addEventListener("click", joinChannel);
 document.getElementById("channelConfirm").addEventListener("click", confirmChannel);
-document.getElementById("channelInput").addEventListener("input", renderChannelPreview);
 document.getElementById("channelInput").addEventListener("keydown", e => { if (e.key === "Enter") confirmChannel(); });
 document.getElementById("chanCopyBtn").addEventListener("click", copyChannelTopic);
+document.getElementById("chanNewBtn").addEventListener("click", newChannel);
+document.getElementById("channelDone").addEventListener("click", closeSheet);
+// Tap a chip to switch; tap its × to forget that channel.
+document.getElementById("chanList").addEventListener("click", e => {
+  const x = e.target.closest("[data-x]");
+  if (x) { forgetChannel(x.getAttribute("data-x")); return; }
+  const chip = e.target.closest(".chan-chip");
+  if (chip) switchChannel(chip.dataset.code);
+});
 document.getElementById("refreshBtn").addEventListener("click", () => {
   const b = document.getElementById("refreshBtn");
   b.classList.add("spinning");
@@ -1122,6 +1283,7 @@ document.getElementById("refreshBtn").addEventListener("click", () => {
 /* ---------- init ---------- */
 const firstRun = !getChannel();     // no channel stored yet → brand-new user
 ensureChannel();
+registerChannel(getChannel());      // make sure the active channel is in the list
 paintChip();
 paintChannel();
 if (!configured) document.getElementById("setupBanner").style.display = "block";
