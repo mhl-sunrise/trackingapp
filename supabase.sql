@@ -24,9 +24,11 @@ alter table public.locations enable row level security;
 drop policy if exists "beacon read"   on public.locations;
 drop policy if exists "beacon insert" on public.locations;
 drop policy if exists "beacon update" on public.locations;
+drop policy if exists "beacon delete" on public.locations;
 create policy "beacon read"   on public.locations for select using (true);
 create policy "beacon insert" on public.locations for insert with check (true);
 create policy "beacon update" on public.locations for update using (true) with check (true);
+create policy "beacon delete" on public.locations for delete using (true);
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -64,12 +66,19 @@ end $$;
 alter table public.locations
   add constraint locations_name_channel_key unique (name, channel);
 
+-- 3. Let people remove their own pin. The app only ever deletes its own
+--    name+channel row, but RLS needs a delete policy to allow it at all.
+drop policy if exists "beacon delete" on public.locations;
+create policy "beacon delete" on public.locations for delete using (true);
+
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Security note
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Channels keep groups from seeing each other's pins in normal use, but they are
 -- NOT access control: the app ships a public anon key, so anyone who knows a
--- channel name (or reads the page source) can query that channel. Don't put
--- sensitive locations in a public Beacon. For real isolation, run separate
--- Supabase projects, or add authentication with per-user RLS policies.
+-- channel name (or reads the page source) can read, edit, or DELETE pins in that
+-- channel. "Remove my pin" is restricted to your own row only in the client, not
+-- by the database. Don't put sensitive locations in a public Beacon. For real
+-- isolation, run separate Supabase projects, or add authentication with
+-- per-user RLS policies.

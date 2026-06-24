@@ -478,6 +478,23 @@
     line-height: 1.6;
   }
   .pop-row span { color: #d4d9df; }
+  .pop-del {
+    display: block;
+    width: 100%;
+    margin-top: 10px;
+    padding: 7px 10px;
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    border-radius: 9px;
+    background: rgba(239, 68, 68, 0.12);
+    color: #ffb4b4;
+    font-family: var(--ui);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+  }
+  .pop-del.armed { background: #ef4444; color: #fff; border-color: #ef4444; }
+  .pop-del:active { transform: scale(0.98); }
 
   .leaflet-control-attribution {
     font-size: 9px;
@@ -720,7 +737,8 @@ function renderMarkers(rows) {
       '<div class="pop-name ' + (isMe ? "me" : "") + '">' + escapeHtml(r.name) + (isMe ? " (you)" : "") + "</div>" +
       '<div class="pop-row">lat <span>' + r.latitude.toFixed(6) + "</span><br>" +
       "lng <span>" + r.longitude.toFixed(6) + "</span>" + accRow + "<br>" +
-      "seen <span>" + relTime(r.recorded_at) + "</span></div>";
+      "seen <span>" + relTime(r.recorded_at) + "</span></div>" +
+      (isMe ? '<button class="pop-del" type="button">Remove my pin</button>' : "");
 
     if (markers[r.name]) {
       markers[r.name].setLatLng(ll).setIcon(isMe ? meIcon() : otherIcon());
@@ -889,6 +907,52 @@ function setBusy(busy, label) {
   lbl.textContent = busy ? label : "Log my location";
 }
 
+/* ---------- remove your own pin ---------- */
+// Two-tap confirm: the first tap arms the button, the second (within 3s) deletes.
+let deleteArmTimer = null;
+function armOrDelete(btn) {
+  if (btn.dataset.armed === "1") {
+    clearTimeout(deleteArmTimer);
+    deleteMyPin();
+  } else {
+    btn.dataset.armed = "1";
+    btn.textContent = "Tap again to remove";
+    btn.classList.add("armed");
+    deleteArmTimer = setTimeout(() => {
+      btn.dataset.armed = "0";
+      btn.textContent = "Remove my pin";
+      btn.classList.remove("armed");
+    }, 3000);
+  }
+}
+
+// Delete this user's own row (their name in the current channel). Mirrors the
+// channel-column fallback used by refresh/saveLocation. Asking for the deleted
+// rows back lets us tell "removed" apart from "blocked by a missing policy".
+async function deleteMyPin() {
+  const name = getName();
+  if (!sb || !name) return;
+  const run = withChannel => {
+    let q = sb.from(TABLE).delete().eq("name", name);
+    if (withChannel) q = q.eq("channel", getChannel());
+    return q.select();
+  };
+  let { data, error } = await run(hasChannelCol);
+  if (error && hasChannelCol && isMissingColumn(error, "channel")) {
+    hasChannelCol = false;
+    ({ data, error } = await run(false));
+  }
+  if (error) { toast("Couldn't remove your pin. Check your table's access rules.", true); return; }
+  if (!data || data.length === 0) {
+    toast("Couldn't remove — add the delete policy from supabase.sql.", true);
+    return;
+  }
+  if (markers[name]) { map.removeLayer(markers[name]); delete markers[name]; }
+  if (accCircle) { map.removeLayer(accCircle); accCircle = null; }
+  toast("Your pin was removed.");
+  refresh();
+}
+
 /* ---------- name sheet ---------- */
 function openSheet(editing) {
   const input = document.getElementById("nameInput");
@@ -992,6 +1056,12 @@ document.getElementById("nameChip").addEventListener("click", () => openSheet(!!
 document.getElementById("nameConfirm").addEventListener("click", confirmName);
 document.getElementById("nameInput").addEventListener("keydown", e => { if (e.key === "Enter") confirmName(); });
 document.getElementById("scrim").addEventListener("click", closeSheet);
+// The delete button lives inside Leaflet popups, which are re-created on open,
+// so listen via delegation rather than binding each one.
+document.addEventListener("click", e => {
+  const btn = e.target.closest && e.target.closest(".pop-del");
+  if (btn) armOrDelete(btn);
+});
 document.getElementById("channelBtn").addEventListener("click", openChannelSheet);
 document.getElementById("channelConfirm").addEventListener("click", confirmChannel);
 document.getElementById("channelInput").addEventListener("input", renderChannelPreview);
