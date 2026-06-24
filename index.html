@@ -544,7 +544,7 @@
 <div class="sheet" id="channelSheet">
   <div class="grip"></div>
   <h2>Notification channel</h2>
-  <p>Everyone who shares a channel gets a phone alert the moment someone in it logs a location. Pick any code — make it your group's shared word, or keep it private to just you.</p>
+  <p>People who share a channel see each other on the map and get a phone alert whenever someone in it logs. Pick any code — make it your group's shared word, or keep it private to just you.</p>
   <div class="chan-field">
     <span class="chan-prefix">location-channel-</span>
     <input id="channelInput" type="text" inputmode="text" autocomplete="off" autocapitalize="off"
@@ -755,12 +755,25 @@ function renderMarkers(rows) {
   return bounds;
 }
 
+// Schema-capability flags. We assume the newest columns exist and fall back the
+// first time the API reports one missing, so the app also works on older tables
+// (see supabase.sql for the migration that adds them).
+let hasChannelCol = true;
+let hasAccuracyCol = true;
 let didFit = false;
 async function refresh(fit = false) {
   if (!sb) return;
-  const { data, error } = await sb.from(TABLE).select("*");
-  if (error) { toast("Couldn't load locations. Check your connection.", true); return; }
-  const bounds = renderMarkers(data || []);
+  // Only load pins for this device's channel, so groups sharing one table don't
+  // see each other's markers. Falls back to the whole table pre-migration.
+  let res = await (hasChannelCol
+    ? sb.from(TABLE).select("*").eq("channel", getChannel())
+    : sb.from(TABLE).select("*"));
+  if (res.error && hasChannelCol && isMissingColumn(res.error, "channel")) {
+    hasChannelCol = false;
+    res = await sb.from(TABLE).select("*");
+  }
+  if (res.error) { toast("Couldn't load locations. Check your connection.", true); return; }
+  const bounds = renderMarkers(res.data || []);
   if ((fit || !didFit) && bounds.length) {
     map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 });
     didFit = true;
@@ -811,20 +824,20 @@ function getBestPosition(onProgress) {
   });
 }
 
-// Save the fix. Sends accuracy when the column exists, and transparently falls
-// back to the older schema (no accuracy column) so the app keeps working before
-// the migration below is run.
-let hasAccuracyCol = true;
+// Save the fix. The row carries the channel and accuracy when those columns
+// exist; if the API reports one missing we drop it and retry, so the app keeps
+// working on tables that predate the migration (see supabase.sql).
 async function saveLocation(name, latitude, longitude, accuracy) {
-  const base = { name, latitude, longitude, recorded_at: new Date().toISOString() };
-  if (hasAccuracyCol && typeof accuracy === "number") {
-    const { error } = await sb.from(TABLE).upsert({ ...base, accuracy }, { onConflict: "name" });
+  for (;;) {
+    const row = { name, latitude, longitude, recorded_at: new Date().toISOString() };
+    if (hasChannelCol) row.channel = getChannel();
+    if (hasAccuracyCol && typeof accuracy === "number") row.accuracy = accuracy;
+    const { error } = await sb.from(TABLE).upsert(row, { onConflict: hasChannelCol ? "name,channel" : "name" });
     if (!error) return null;
-    if (!isMissingColumn(error, "accuracy")) return error;
-    hasAccuracyCol = false;                             // remember; skip the column from now on
+    if (hasChannelCol && isMissingColumn(error, "channel")) { hasChannelCol = false; continue; }
+    if (hasAccuracyCol && isMissingColumn(error, "accuracy")) { hasAccuracyCol = false; continue; }
+    return error;
   }
-  const { error } = await sb.from(TABLE).upsert(base, { onConflict: "name" });
-  return error;
 }
 
 function isMissingColumn(error, col) {
