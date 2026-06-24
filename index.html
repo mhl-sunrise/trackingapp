@@ -497,10 +497,13 @@ function relTime(ts) {
   return Math.floor(s / 86400) + "d ago";
 }
 
+let accCircle = null;   // visualises the accuracy radius of your own latest fix
+
 function renderMarkers(rows) {
   const me = getName();
   const seen = new Set();
   let bounds = [];
+  let meWithAcc = null;
 
   rows.forEach(r => {
     if (typeof r.latitude !== "number" || typeof r.longitude !== "number") return;
@@ -509,10 +512,12 @@ function renderMarkers(rows) {
     const ll = [r.latitude, r.longitude];
     bounds.push(ll);
 
+    const accRow = (typeof r.accuracy === "number")
+      ? "<br>± <span>" + Math.round(r.accuracy) + " m</span>" : "";
     const popup =
       '<div class="pop-name ' + (isMe ? "me" : "") + '">' + escapeHtml(r.name) + (isMe ? " (you)" : "") + "</div>" +
-      '<div class="pop-row">lat <span>' + r.latitude.toFixed(5) + "</span><br>" +
-      "lng <span>" + r.longitude.toFixed(5) + "</span><br>" +
+      '<div class="pop-row">lat <span>' + r.latitude.toFixed(6) + "</span><br>" +
+      "lng <span>" + r.longitude.toFixed(6) + "</span>" + accRow + "<br>" +
       "seen <span>" + relTime(r.recorded_at) + "</span></div>";
 
     if (markers[r.name]) {
@@ -525,7 +530,20 @@ function renderMarkers(rows) {
       m.bindPopup(popup);
       markers[r.name] = m;
     }
+
+    if (isMe && typeof r.accuracy === "number") meWithAcc = { ll, acc: r.accuracy };
   });
+
+  // accuracy halo around your own pin
+  if (meWithAcc) {
+    if (accCircle) accCircle.setLatLng(meWithAcc.ll).setRadius(meWithAcc.acc);
+    else accCircle = L.circle(meWithAcc.ll, {
+      radius: meWithAcc.acc, color: "#ec0f69", weight: 1, opacity: 0.4,
+      fillColor: "#ec0f69", fillOpacity: 0.08, interactive: false,
+    }).addTo(map);
+  } else if (accCircle) {
+    map.removeLayer(accCircle); accCircle = null;
+  }
 
   // drop markers that no longer exist
   Object.keys(markers).forEach(name => {
@@ -538,7 +556,7 @@ function renderMarkers(rows) {
 let didFit = false;
 async function refresh(fit = false) {
   if (!sb) return;
-  const { data, error } = await sb.from(TABLE).select("name, latitude, longitude, recorded_at");
+  const { data, error } = await sb.from(TABLE).select("*");
   if (error) { toast("Couldn't load locations. Check your connection.", true); return; }
   const bounds = renderMarkers(data || []);
   if ((fit || !didFit) && bounds.length) {
@@ -550,6 +568,68 @@ async function refresh(fit = false) {
 /* ---------- logging ---------- */
 let pendingLog = false;
 
+// A single getCurrentPosition returns the first fix available — often a coarse
+// network/Wi-Fi estimate delivered before the GPS receiver has locked. We instead
+// watch the position and keep the tightest fix, letting it converge.
+const ACCURACY_TARGET_M = 8;      // stop early once a fix is at least this good
+const SAMPLE_WINDOW_MS  = 20000;  // otherwise keep refining up to this long
+const SETTLE_MS         = 5000;   // ...but stop early if it stops improving for this long
+
+function getBestPosition(onProgress) {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) { reject({ code: 0 }); return; }
+
+    let best = null, lastImprove = Date.now(), done = false;
+    let watchId = null, hardStop = null, settleCheck = null;
+
+    const cleanup = () => {
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      if (hardStop) clearTimeout(hardStop);
+      if (settleCheck) clearInterval(settleCheck);
+    };
+    const finish = () => { if (done) return; done = true; cleanup(); best ? resolve(best) : reject({ code: 3 }); };
+    const fail = err => { if (done) return; done = true; cleanup(); reject(err); };
+
+    watchId = navigator.geolocation.watchPosition(pos => {
+      const acc = pos.coords.accuracy ?? Infinity;
+      if (!best || acc < (best.coords.accuracy ?? Infinity)) {
+        best = pos;
+        lastImprove = Date.now();
+        onProgress && onProgress(acc);
+      }
+      if (acc <= ACCURACY_TARGET_M) finish();          // good enough — stop now
+    }, err => {
+      if (!best) fail(err);                             // only abort if we have nothing yet
+    }, { enableHighAccuracy: true, timeout: SAMPLE_WINDOW_MS, maximumAge: 0 });
+
+    hardStop = setTimeout(finish, SAMPLE_WINDOW_MS);
+    settleCheck = setInterval(() => {
+      if (best && Date.now() - lastImprove > SETTLE_MS) finish();  // converged
+    }, 1000);
+  });
+}
+
+// Save the fix. Sends accuracy when the column exists, and transparently falls
+// back to the older schema (no accuracy column) so the app keeps working before
+// the migration below is run.
+let hasAccuracyCol = true;
+async function saveLocation(name, latitude, longitude, accuracy) {
+  const base = { name, latitude, longitude, recorded_at: new Date().toISOString() };
+  if (hasAccuracyCol && typeof accuracy === "number") {
+    const { error } = await sb.from(TABLE).upsert({ ...base, accuracy }, { onConflict: "name" });
+    if (!error) return null;
+    if (!isMissingColumn(error, "accuracy")) return error;
+    hasAccuracyCol = false;                             // remember; skip the column from now on
+  }
+  const { error } = await sb.from(TABLE).upsert(base, { onConflict: "name" });
+  return error;
+}
+
+function isMissingColumn(error, col) {
+  const msg = ((error.message || "") + " " + (error.details || "")).toLowerCase();
+  return error.code === "PGRST204" || (msg.includes(col) && (msg.includes("column") || msg.includes("schema cache")));
+}
+
 function logLocation() {
   const name = getName();
   if (!name) { openSheet(false); pendingLog = true; return; }
@@ -557,26 +637,25 @@ function logLocation() {
   if (!navigator.geolocation) { toast("This device can't share location.", true); return; }
 
   setBusy(true, "Locating…");
-  navigator.geolocation.getCurrentPosition(async pos => {
-    const { latitude, longitude } = pos.coords;
-    setBusy(true, "Saving…");
-    const { error } = await sb.from(TABLE).upsert(
-      { name, latitude, longitude, recorded_at: new Date().toISOString() },
-      { onConflict: "name" }
-    );
-    setBusy(false);
-    if (error) { toast("Save failed. Check your table's access rules.", true); return; }
-    await refresh();
-    map.flyTo([latitude, longitude], 16, { duration: 0.8 });
-    toast("Location saved");
-  }, err => {
-    setBusy(false);
-    if (err.code === 1) toast(inIframe
-      ? "Location is blocked in this embedded view. Open the page at its own URL to share your spot."
-      : "Location is off. Enable it in your browser settings.", true);
-    else if (err.code === 3) toast("Location timed out. Try again.", true);
-    else toast("Couldn't get your location.", true);
-  }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
+  getBestPosition(acc => setBusy(true, "Locating… ±" + Math.round(acc) + " m"))
+    .then(async pos => {
+      const { latitude, longitude, accuracy } = pos.coords;
+      setBusy(true, "Saving…");
+      const error = await saveLocation(name, latitude, longitude, accuracy);
+      setBusy(false);
+      if (error) { toast("Save failed. Check your table's access rules.", true); return; }
+      await refresh();
+      map.flyTo([latitude, longitude], 17, { duration: 0.8 });
+      toast("Location saved ±" + Math.round(accuracy) + " m");
+    })
+    .catch(err => {
+      setBusy(false);
+      if (err.code === 1) toast(inIframe
+        ? "Location is blocked in this embedded view. Open the page at its own URL to share your spot."
+        : "Location is off. Enable it in your browser settings.", true);
+      else if (err.code === 3) toast("Location timed out. Try again.", true);
+      else toast("Couldn't get your location.", true);
+    });
 }
 
 function setBusy(busy, label) {
