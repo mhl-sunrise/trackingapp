@@ -578,6 +578,9 @@
   .pop-del.armed { background: #ef4444; color: #fff; border-color: #ef4444; }
   .pop-del:active { transform: scale(0.98); }
 
+  /* black & white base map — pins and the accuracy halo keep their colour */
+  .leaflet-tile-pane { filter: grayscale(1); }
+
   .leaflet-control-attribution {
     font-size: 9px;
     background: rgba(255, 255, 255, 0.7) !important;
@@ -603,9 +606,10 @@
     <span class="edit">✎</span>
   </button>
   <div class="hud-actions">
-    <button class="icon-btn" id="channelBtn" aria-label="Notification channel">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="currentColor" stroke="none"/>
+    <button class="icon-btn" id="channelBtn" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V15z"/>
       </svg>
     </button>
     <button class="icon-btn" id="refreshBtn" aria-label="Refresh map">
