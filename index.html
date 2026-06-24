@@ -311,6 +311,12 @@
     cursor: pointer;
   }
   .sheet .confirm:active { transform: scale(0.99); }
+  .sheet .confirm.ghost {
+    background: transparent;
+    border: 1.5px solid var(--line);
+    color: #fff;
+    margin-top: 10px;
+  }
 
   /* ---------- channel sheet ---------- */
   .chan-field {
@@ -478,6 +484,23 @@
     line-height: 1.6;
   }
   .pop-row span { color: #d4d9df; }
+  .pop-del {
+    display: block;
+    width: 100%;
+    margin-top: 10px;
+    padding: 7px 10px;
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    border-radius: 9px;
+    background: rgba(239, 68, 68, 0.12);
+    color: #ffb4b4;
+    font-family: var(--ui);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+  }
+  .pop-del.armed { background: #ef4444; color: #fff; border-color: #ef4444; }
+  .pop-del:active { transform: scale(0.98); }
 
   .leaflet-control-attribution {
     font-size: 9px;
@@ -541,10 +564,18 @@
   <button class="confirm" id="nameConfirm">Start sharing</button>
 </div>
 
+<div class="sheet" id="welcomeSheet">
+  <div class="grip"></div>
+  <h2>Pick a channel</h2>
+  <p>A channel is a private space for a group's pins and alerts. Start your own and share the code, or join one someone gave you.</p>
+  <button class="confirm" id="startNewBtn">Start a new channel</button>
+  <button class="confirm ghost" id="joinBtn">Join with a code</button>
+</div>
+
 <div class="sheet" id="channelSheet">
   <div class="grip"></div>
   <h2>Notification channel</h2>
-  <p>Everyone who shares a channel gets a phone alert the moment someone in it logs a location. Pick any code — make it your group's shared word, or keep it private to just you.</p>
+  <p>People who share a channel see each other on the map and get a phone alert whenever someone in it logs. Pick any code — make it your group's shared word, or keep it private to just you.</p>
   <div class="chan-field">
     <span class="chan-prefix">location-channel-</span>
     <input id="channelInput" type="text" inputmode="text" autocomplete="off" autocapitalize="off"
@@ -592,8 +623,10 @@ const CHANNEL_PREFIX = "location-channel-";    // every channel topic starts wit
 
 const NAME_KEY = "beacon_name";
 const CHANNEL_KEY = "beacon_channel";
+const ONBOARDED_KEY = "beacon_onboarded";
 let memName = null;                 // in-memory fallback if storage is blocked
 let memChannel = null;              // ...same for the channel code
+let memOnboarded = false;           // ...same for the first-run onboarding flag
 const configured = SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== "PASTE_YOUR_ANON_KEY_HERE";
 const sb = configured ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
@@ -661,6 +694,16 @@ function paintChannel() {
   if (btn) btn.title = "Channel: " + ntfyTopic();
 }
 
+/* ---------- onboarding flag (shown once) ---------- */
+function isOnboarded() {
+  try { return !!localStorage.getItem(ONBOARDED_KEY) || memOnboarded; }
+  catch { return memOnboarded; }
+}
+function setOnboarded() {
+  memOnboarded = true;
+  try { localStorage.setItem(ONBOARDED_KEY, "1"); } catch {}
+}
+
 /* ---------- map ---------- */
 const map = L.map("map", { zoomControl: false, attributionControl: true })
   .setView([48.15, 17.11], 6);   // Central Europe default
@@ -720,7 +763,8 @@ function renderMarkers(rows) {
       '<div class="pop-name ' + (isMe ? "me" : "") + '">' + escapeHtml(r.name) + (isMe ? " (you)" : "") + "</div>" +
       '<div class="pop-row">lat <span>' + r.latitude.toFixed(6) + "</span><br>" +
       "lng <span>" + r.longitude.toFixed(6) + "</span>" + accRow + "<br>" +
-      "seen <span>" + relTime(r.recorded_at) + "</span></div>";
+      "seen <span>" + relTime(r.recorded_at) + "</span></div>" +
+      (isMe ? '<button class="pop-del" type="button">Remove my pin</button>' : "");
 
     if (markers[r.name]) {
       markers[r.name].setLatLng(ll).setIcon(isMe ? meIcon() : otherIcon());
@@ -755,12 +799,25 @@ function renderMarkers(rows) {
   return bounds;
 }
 
+// Schema-capability flags. We assume the newest columns exist and fall back the
+// first time the API reports one missing, so the app also works on older tables
+// (see supabase.sql for the migration that adds them).
+let hasChannelCol = true;
+let hasAccuracyCol = true;
 let didFit = false;
 async function refresh(fit = false) {
   if (!sb) return;
-  const { data, error } = await sb.from(TABLE).select("*");
-  if (error) { toast("Couldn't load locations. Check your connection.", true); return; }
-  const bounds = renderMarkers(data || []);
+  // Only load pins for this device's channel, so groups sharing one table don't
+  // see each other's markers. Falls back to the whole table pre-migration.
+  let res = await (hasChannelCol
+    ? sb.from(TABLE).select("*").eq("channel", getChannel())
+    : sb.from(TABLE).select("*"));
+  if (res.error && hasChannelCol && isMissingColumn(res.error, "channel")) {
+    hasChannelCol = false;
+    res = await sb.from(TABLE).select("*");
+  }
+  if (res.error) { toast("Couldn't load locations. Check your connection.", true); return; }
+  const bounds = renderMarkers(res.data || []);
   if ((fit || !didFit) && bounds.length) {
     map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 });
     didFit = true;
@@ -811,20 +868,20 @@ function getBestPosition(onProgress) {
   });
 }
 
-// Save the fix. Sends accuracy when the column exists, and transparently falls
-// back to the older schema (no accuracy column) so the app keeps working before
-// the migration below is run.
-let hasAccuracyCol = true;
+// Save the fix. The row carries the channel and accuracy when those columns
+// exist; if the API reports one missing we drop it and retry, so the app keeps
+// working on tables that predate the migration (see supabase.sql).
 async function saveLocation(name, latitude, longitude, accuracy) {
-  const base = { name, latitude, longitude, recorded_at: new Date().toISOString() };
-  if (hasAccuracyCol && typeof accuracy === "number") {
-    const { error } = await sb.from(TABLE).upsert({ ...base, accuracy }, { onConflict: "name" });
+  for (;;) {
+    const row = { name, latitude, longitude, recorded_at: new Date().toISOString() };
+    if (hasChannelCol) row.channel = getChannel();
+    if (hasAccuracyCol && typeof accuracy === "number") row.accuracy = accuracy;
+    const { error } = await sb.from(TABLE).upsert(row, { onConflict: hasChannelCol ? "name,channel" : "name" });
     if (!error) return null;
-    if (!isMissingColumn(error, "accuracy")) return error;
-    hasAccuracyCol = false;                             // remember; skip the column from now on
+    if (hasChannelCol && isMissingColumn(error, "channel")) { hasChannelCol = false; continue; }
+    if (hasAccuracyCol && isMissingColumn(error, "accuracy")) { hasAccuracyCol = false; continue; }
+    return error;
   }
-  const { error } = await sb.from(TABLE).upsert(base, { onConflict: "name" });
-  return error;
 }
 
 function isMissingColumn(error, col) {
@@ -876,6 +933,52 @@ function setBusy(busy, label) {
   lbl.textContent = busy ? label : "Log my location";
 }
 
+/* ---------- remove your own pin ---------- */
+// Two-tap confirm: the first tap arms the button, the second (within 3s) deletes.
+let deleteArmTimer = null;
+function armOrDelete(btn) {
+  if (btn.dataset.armed === "1") {
+    clearTimeout(deleteArmTimer);
+    deleteMyPin();
+  } else {
+    btn.dataset.armed = "1";
+    btn.textContent = "Tap again to remove";
+    btn.classList.add("armed");
+    deleteArmTimer = setTimeout(() => {
+      btn.dataset.armed = "0";
+      btn.textContent = "Remove my pin";
+      btn.classList.remove("armed");
+    }, 3000);
+  }
+}
+
+// Delete this user's own row (their name in the current channel). Mirrors the
+// channel-column fallback used by refresh/saveLocation. Asking for the deleted
+// rows back lets us tell "removed" apart from "blocked by a missing policy".
+async function deleteMyPin() {
+  const name = getName();
+  if (!sb || !name) return;
+  const run = withChannel => {
+    let q = sb.from(TABLE).delete().eq("name", name);
+    if (withChannel) q = q.eq("channel", getChannel());
+    return q.select();
+  };
+  let { data, error } = await run(hasChannelCol);
+  if (error && hasChannelCol && isMissingColumn(error, "channel")) {
+    hasChannelCol = false;
+    ({ data, error } = await run(false));
+  }
+  if (error) { toast("Couldn't remove your pin. Check your table's access rules.", true); return; }
+  if (!data || data.length === 0) {
+    toast("Couldn't remove — add the delete policy from supabase.sql.", true);
+    return;
+  }
+  if (markers[name]) { map.removeLayer(markers[name]); delete markers[name]; }
+  if (accCircle) { map.removeLayer(accCircle); accCircle = null; }
+  toast("Your pin was removed.");
+  refresh();
+}
+
 /* ---------- name sheet ---------- */
 function openSheet(editing) {
   const input = document.getElementById("nameInput");
@@ -894,8 +997,26 @@ function closeSheet() {
   document.getElementById("scrim").classList.remove("open");
   document.getElementById("sheet").classList.remove("open");
   document.getElementById("channelSheet").classList.remove("open");
+  document.getElementById("welcomeSheet").classList.remove("open");
   document.getElementById("nameInput").blur();
   document.getElementById("channelInput").blur();
+}
+
+/* ---------- first-run onboarding ---------- */
+// Brand-new users are asked to start their own channel (the random one we just
+// generated) or join an existing one by code. Shown only once.
+function openWelcomeSheet() {
+  setOnboarded();
+  document.getElementById("scrim").classList.add("open");
+  document.getElementById("welcomeSheet").classList.add("open");
+}
+function startNewChannel() {
+  closeSheet();
+  openChannelSheet();          // reveal your auto-created code + how to get alerts
+}
+function joinChannel() {
+  closeSheet();
+  openChannelSheet(true);      // empty field to type the code you were given
 }
 function confirmName() {
   const v = document.getElementById("nameInput").value.trim();
@@ -907,9 +1028,9 @@ function confirmName() {
 }
 
 /* ---------- channel sheet ---------- */
-function openChannelSheet() {
+function openChannelSheet(startEmpty) {
   const input = document.getElementById("channelInput");
-  input.value = getChannel() || "";
+  input.value = startEmpty ? "" : (getChannel() || "");
   document.getElementById("channelErr").textContent = "";
   renderChannelPreview();
   document.getElementById("scrim").classList.add("open");
@@ -979,7 +1100,15 @@ document.getElementById("nameChip").addEventListener("click", () => openSheet(!!
 document.getElementById("nameConfirm").addEventListener("click", confirmName);
 document.getElementById("nameInput").addEventListener("keydown", e => { if (e.key === "Enter") confirmName(); });
 document.getElementById("scrim").addEventListener("click", closeSheet);
-document.getElementById("channelBtn").addEventListener("click", openChannelSheet);
+// The delete button lives inside Leaflet popups, which are re-created on open,
+// so listen via delegation rather than binding each one.
+document.addEventListener("click", e => {
+  const btn = e.target.closest && e.target.closest(".pop-del");
+  if (btn) armOrDelete(btn);
+});
+document.getElementById("channelBtn").addEventListener("click", () => openChannelSheet());
+document.getElementById("startNewBtn").addEventListener("click", startNewChannel);
+document.getElementById("joinBtn").addEventListener("click", joinChannel);
 document.getElementById("channelConfirm").addEventListener("click", confirmChannel);
 document.getElementById("channelInput").addEventListener("input", renderChannelPreview);
 document.getElementById("channelInput").addEventListener("keydown", e => { if (e.key === "Enter") confirmChannel(); });
@@ -991,10 +1120,13 @@ document.getElementById("refreshBtn").addEventListener("click", () => {
 });
 
 /* ---------- init ---------- */
+const firstRun = !getChannel();     // no channel stored yet → brand-new user
 ensureChannel();
 paintChip();
 paintChannel();
 if (!configured) document.getElementById("setupBanner").style.display = "block";
+if (firstRun && !isOnboarded()) openWelcomeSheet();   // ask: start new or join
+else setOnboarded();                                  // existing users: don't prompt
 refresh(true);
 setInterval(() => refresh(false), REFRESH_MS);
 
