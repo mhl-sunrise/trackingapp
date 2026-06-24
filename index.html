@@ -10,8 +10,8 @@
 
 <style>
   :root {
-    --signal: #ec0f69;        /* you — live beacon */
-    --signal-soft: rgba(236, 15, 105, 0.18);
+    --signal: #2563eb;        /* you — live beacon */
+    --signal-soft: rgba(37, 99, 235, 0.18);
     --chrome: #0e1116;        /* floating panels */
     --chrome-2: #161b22;
     --line: rgba(255, 255, 255, 0.10);
@@ -112,9 +112,9 @@
     top: calc(env(safe-area-inset-top, 0px) + 62px);
     left: 12px;
     right: 12px;
-    background: #2a1116;
-    border: 1px solid rgba(236, 15, 105, 0.4);
-    color: #ffd9e5;
+    background: #0f1830;
+    border: 1px solid rgba(37, 99, 235, 0.4);
+    color: #d9e4ff;
     border-radius: 14px;
     padding: 12px 14px;
     font-size: 13px;
@@ -163,7 +163,7 @@
     text-align: center;
   }
   .toast.show { opacity: 1; transform: translateY(0); }
-  .toast.error { background: #3a1118; border-color: rgba(236, 15, 105, 0.5); color: #ffd9e5; }
+  .toast.error { background: #3a1114; border-color: rgba(239, 68, 68, 0.5); color: #ffd9d9; }
 
   .beacon {
     position: relative;
@@ -183,7 +183,7 @@
     justify-content: center;
     gap: 11px;
     cursor: pointer;
-    box-shadow: 0 10px 30px rgba(236, 15, 105, 0.38);
+    box-shadow: 0 10px 30px rgba(37, 99, 235, 0.38);
     overflow: hidden;
     transition: transform 0.12s ease, opacity 0.2s ease;
   }
@@ -280,7 +280,7 @@
   }
   .sheet input:focus { border-color: var(--signal); }
   .sheet .err {
-    color: #ff8fb4;
+    color: #f87171;
     font-size: 12.5px;
     margin: 8px 2px 0;
     min-height: 16px;
@@ -299,6 +299,30 @@
     cursor: pointer;
   }
   .sheet .confirm:active { transform: scale(0.99); }
+
+  /* desktop: centered modal instead of a full-width bottom sheet */
+  @media (min-width: 640px) {
+    .sheet {
+      left: 50%;
+      right: auto;
+      bottom: auto;
+      top: 45%;                       /* sit slightly above true center — exact 50% reads as too low */
+      width: 400px;
+      max-width: calc(100% - 48px);
+      border-radius: 20px;
+      padding: 24px 26px 26px;
+      transform: translate(-50%, -50%) scale(0.96);
+      opacity: 0;
+      pointer-events: none;
+      transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.18s ease;
+    }
+    .sheet.open {
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .sheet .grip { display: none; }   /* drag-grip is a mobile-only affordance */
+  }
 
   /* ---------- markers ---------- */
   .pin { position: relative; }
@@ -335,7 +359,7 @@
     white-space: nowrap;
   }
   .leaflet-tooltip.tag::before { display: none; }
-  .leaflet-tooltip.tag.tag-me { color: #ffb3cf; border-color: rgba(236, 15, 105, 0.5); }
+  .leaflet-tooltip.tag.tag-me { color: #9dbcff; border-color: rgba(37, 99, 235, 0.5); }
 
   .leaflet-popup-content-wrapper {
     background: var(--chrome);
@@ -423,6 +447,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const TABLE = "locations";
 const REFRESH_MS = 20000;   // auto-refresh every 20s
+const NTFY_TOPIC = "https://ntfy.sh/mhlocations";   // push notification on each new log
 /* ============================================================ */
 
 const NAME_KEY = "beacon_name";
@@ -538,8 +563,8 @@ function renderMarkers(rows) {
   if (meWithAcc) {
     if (accCircle) accCircle.setLatLng(meWithAcc.ll).setRadius(meWithAcc.acc);
     else accCircle = L.circle(meWithAcc.ll, {
-      radius: meWithAcc.acc, color: "#ec0f69", weight: 1, opacity: 0.4,
-      fillColor: "#ec0f69", fillOpacity: 0.08, interactive: false,
+      radius: meWithAcc.acc, color: "#2563eb", weight: 1, opacity: 0.4,
+      fillColor: "#2563eb", fillOpacity: 0.08, interactive: false,
     }).addTo(map);
   } else if (accCircle) {
     map.removeLayer(accCircle); accCircle = null;
@@ -630,6 +655,13 @@ function isMissingColumn(error, col) {
   return error.code === "PGRST204" || (msg.includes(col) && (msg.includes("column") || msg.includes("schema cache")));
 }
 
+// Fire-and-forget push to the ntfy topic. Never blocks or fails the save.
+function notifyNtfy(name) {
+  try {
+    fetch(NTFY_TOPIC, { method: "POST", body: name + " has just logged new location" }).catch(() => {});
+  } catch (e) {}
+}
+
 function logLocation() {
   const name = getName();
   if (!name) { openSheet(false); pendingLog = true; return; }
@@ -644,6 +676,7 @@ function logLocation() {
       const error = await saveLocation(name, latitude, longitude, accuracy);
       setBusy(false);
       if (error) { toast("Save failed. Check your table's access rules.", true); return; }
+      notifyNtfy(name);
       await refresh();
       map.flyTo([latitude, longitude], 17, { duration: 0.8 });
       toast("Location saved ±" + Math.round(accuracy) + " m");
