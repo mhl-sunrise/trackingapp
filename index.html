@@ -598,7 +598,7 @@
       right: auto;
       bottom: auto;
       top: 45%;                       /* sit slightly above true center — exact 50% reads as too low */
-      width: 400px;
+      width: 460px;                   /* wide enough for the alert hint on one line */
       max-width: calc(100% - 48px);
       border-radius: 20px;
       padding: 24px 26px 26px;
@@ -1352,7 +1352,7 @@ function paintNotifyHint() {
   if (!notifySupported() || Notification.permission === "denied") { hint.hidden = true; return; }
   hint.hidden = false;
   text.textContent = Notification.permission === "granted"
-    ? "You'll get an alert here when someone on this map moves."
+    ? "You'll get an alert when someone logs new location"
     : "Alerts turn on when you tap Use this map.";
 }
 // Toggle between the "My map" (share) and "Join a map" panes.
