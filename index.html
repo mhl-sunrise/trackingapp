@@ -551,6 +551,17 @@
     color: var(--muted);
     margin: 0 2px;
   }
+  /* "you'll get an alert" reassurance — flat icon, set apart from the hint above */
+  .notify-hint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 14px 2px 0;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--muted);
+  }
+  .notify-hint .notify-ico { width: 15px; height: 15px; flex: none; }
   /* the error line only takes up space when it actually says something */
   .chan-pane .err { min-height: 0; margin: 8px 2px 0; }
   .chan-pane .err:empty { display: none; }
@@ -758,7 +769,13 @@
       <div class="chan-list" id="chanList"></div>
     </div>
 
-    <div class="cc-hint" id="notifyHint" hidden>🔔 You'll get an alert here when someone on this map moves.</div>
+    <div class="notify-hint" id="notifyHint" hidden>
+      <svg class="notify-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>
+        <path d="M13.7 21a2 2 0 0 1-3.4 0"/>
+      </svg>
+      <span id="notifyHintText"></span>
+    </div>
 
     <button class="confirm" id="chanUseBtn" type="button">Use this map</button>
   </div>
@@ -1303,12 +1320,13 @@ function openChannelSheet(focusInput) {
 // Reassure that alerts are on (or coming). Hidden where notifications can't run.
 function paintNotifyHint() {
   const hint = document.getElementById("notifyHint");
-  if (!hint) return;
+  const text = document.getElementById("notifyHintText");
+  if (!hint || !text) return;
   if (!notifySupported() || Notification.permission === "denied") { hint.hidden = true; return; }
   hint.hidden = false;
-  hint.textContent = Notification.permission === "granted"
-    ? "🔔 You'll get an alert here when someone on this map moves."
-    : "🔔 Alerts turn on when you tap Use this map.";
+  text.textContent = Notification.permission === "granted"
+    ? "You'll get an alert here when someone on this map moves."
+    : "Alerts turn on when you tap Use this map.";
 }
 // Toggle between the "My map" (share) and "Join a map" panes.
 function switchTab(tab) {
