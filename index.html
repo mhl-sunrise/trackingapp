@@ -175,22 +175,29 @@
   }
   .dock > * { pointer-events: auto; }
 
+  /* Sits above the modal scrim (z 2000) so confirmations stay readable while a
+     sheet is open. Centered just above the dock. */
   .toast {
+    position: fixed;
+    left: 50%;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
+    z-index: 2200;
     font-family: var(--mono);
     font-size: 12.5px;
     color: #fff;
     background: var(--chrome);
     border: 1px solid var(--line);
-    padding: 8px 14px;
+    padding: 9px 16px;
     border-radius: 999px;
-    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.22);
+    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.45);
     opacity: 0;
-    transform: translateY(8px);
+    transform: translate(-50%, 8px);
     transition: opacity 0.2s ease, transform 0.2s ease;
-    max-width: 92%;
+    pointer-events: none;
+    max-width: min(92%, 420px);
     text-align: center;
   }
-  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
   .toast.error { background: #3a1114; border-color: rgba(239, 68, 68, 0.5); color: #ffd9d9; }
 
   .beacon {
@@ -727,8 +734,8 @@
   Add your Supabase <code>anon</code> key inside this file (the <code>SUPABASE_ANON_KEY</code> line) to start logging. The map works, but saving is disabled until then.
 </div>
 
+<div class="toast" id="toast"></div>
 <div class="dock">
-  <div class="toast" id="toast"></div>
   <button class="beacon" id="logBtn">
     <span class="core"></span>
     <span class="mini-spin"></span>
