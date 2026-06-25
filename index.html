@@ -19,8 +19,10 @@
 
 <style>
   :root {
-    --signal: #2563eb;        /* you — live beacon */
+    --signal: #2563eb;        /* other people + actions */
     --signal-soft: rgba(37, 99, 235, 0.18);
+    --me: #f97316;            /* your own location */
+    --me-soft: rgba(249, 115, 22, 0.22);
     --chrome: #0e1116;        /* floating panels */
     --chrome-2: #161b22;
     --line: rgba(255, 255, 255, 0.10);
@@ -85,9 +87,9 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--signal);
+    background: var(--me);
     flex: none;
-    box-shadow: 0 0 0 4px var(--signal-soft);
+    box-shadow: 0 0 0 4px var(--me-soft);
   }
   .chip .who {
     overflow: hidden;
@@ -531,18 +533,18 @@
     box-sizing: border-box;
     width: 16px; height: 16px;
     border-radius: 50%;
-    background: var(--slate);
+    background: var(--signal);
     border: 2.5px solid #fff;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   }
-  .pin.me .dot { background: var(--signal); }
+  .pin.me .dot { background: var(--me); }
   .pin.me .ring {
     position: absolute;
     left: 50%; top: 50%;
     width: 16px; height: 16px;
     margin: -8px 0 0 -8px;
     border-radius: 50%;
-    border: 2px solid var(--signal);
+    border: 2px solid var(--me);
     animation: ping 2.2s cubic-bezier(0, 0, 0.2, 1) infinite;
   }
 
@@ -559,26 +561,33 @@
     white-space: nowrap;
   }
   .leaflet-tooltip.tag::before { display: none; }
-  .leaflet-tooltip.tag.tag-me { color: #9dbcff; border-color: rgba(37, 99, 235, 0.5); }
+  .leaflet-tooltip.tag.tag-me { color: #fdba74; border-color: rgba(249, 115, 22, 0.55); }
 
   .leaflet-popup-content-wrapper {
     background: var(--chrome);
     color: #fff;
-    border-radius: 14px;
+    border-radius: 16px;
     border: 1px solid var(--line);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
   }
   .leaflet-popup-tip { background: var(--chrome); }
-  .leaflet-popup-content { margin: 12px 14px; font-family: var(--ui); }
-  .pop-name { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
-  .pop-name.me { color: var(--signal); }
+  .leaflet-popup-content { margin: 15px 18px; min-width: 200px; font-family: var(--ui); }
+  .pop-name {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin-bottom: 10px;
+    padding-bottom: 9px;
+    border-bottom: 1px solid var(--line);
+  }
+  .pop-name.me { color: var(--me); }
   .pop-row {
     font-family: var(--mono);
-    font-size: 11.5px;
+    font-size: 12px;
     color: var(--muted);
-    line-height: 1.6;
+    line-height: 1.8;
   }
-  .pop-row span { color: #d4d9df; }
+  .pop-row span { color: #e6eaef; }
   .pop-del {
     display: block;
     width: 100%;
@@ -621,14 +630,14 @@
 <div class="hud">
   <button class="chip unset" id="nameChip" aria-label="Set or change your name">
     <span class="live-dot"></span>
-    <span class="who" id="whoLabel">tap to set your name</span>
+    <span class="who" id="whoLabel">Set name</span>
     <span class="edit">✎</span>
   </button>
   <div class="hud-actions">
     <button class="icon-btn" id="channelBtn" aria-label="Settings">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="3"/>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V15z"/>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.24-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281Z"/>
+        <path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
       </svg>
     </button>
     <button class="icon-btn" id="refreshBtn" aria-label="Refresh map">
@@ -769,7 +778,7 @@ function paintChip() {
     label.innerHTML = "<b>" + escapeHtml(n) + "</b>";
   } else {
     chip.classList.add("unset");
-    label.textContent = "tap to set your name";
+    label.textContent = "Set name";
   }
 }
 
@@ -927,8 +936,8 @@ function renderMarkers(rows) {
   if (meWithAcc) {
     if (accCircle) accCircle.setLatLng(meWithAcc.ll).setRadius(meWithAcc.acc);
     else accCircle = L.circle(meWithAcc.ll, {
-      radius: meWithAcc.acc, color: "#2563eb", weight: 1, opacity: 0.4,
-      fillColor: "#2563eb", fillOpacity: 0.08, interactive: false,
+      radius: meWithAcc.acc, color: "#f97316", weight: 1, opacity: 0.45,
+      fillColor: "#f97316", fillOpacity: 0.1, interactive: false,
     }).addTo(map);
   } else if (accCircle) {
     map.removeLayer(accCircle); accCircle = null;
