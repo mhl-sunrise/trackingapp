@@ -556,6 +556,10 @@
     margin: 18px 2px 8px;
   }
   .chan-pane > .cc-label:first-child { margin-top: 0; }
+  .name-label { margin-top: 2px; }
+  /* the name error only reserves space when it has something to say */
+  #chanNameErr { margin: 8px 2px 0; min-height: 0; }
+  #chanNameErr:empty { display: none; }
   .cc-hint {
     font-size: 12.5px;
     line-height: 1.45;
@@ -774,9 +778,8 @@
 <div class="sheet" id="sheet">
   <div class="grip"></div>
   <h2 id="sheetTitle">What's your name?</h2>
-  <p id="sheetHelp">This tags your spot on the map and becomes your fixed ID. Every time you log, it updates the same entry.</p>
-  <input id="nameInput" type="text" inputmode="text" autocomplete="off" autocapitalize="off"
-         placeholder="e.g. martin" maxlength="40" />
+  <input id="nameInput" type="text" inputmode="text" autocomplete="off" autocapitalize="words"
+         placeholder="Martin" maxlength="40" />
   <div class="err" id="nameErr"></div>
   <button class="confirm" id="nameConfirm">Start sharing</button>
 </div>
@@ -788,6 +791,14 @@
     <button class="chan-tab active" id="tabShareBtn" data-tab="share" type="button" role="tab">Create a map</button>
     <button class="chan-tab" id="tabJoinBtn" data-tab="join" type="button" role="tab">Join a map</button>
   </div>
+
+  <!-- shared by both tabs: who you are on the map -->
+  <div class="cc-label name-label">Your name</div>
+  <div class="chan-field">
+    <input id="chanName" type="text" inputmode="text" autocomplete="off" autocapitalize="words"
+           spellcheck="false" placeholder="e.g. Martin" maxlength="40" />
+  </div>
+  <div class="err" id="chanNameErr"></div>
 
   <!-- ── Tab: share my own channel ───────────────────────── -->
   <div class="chan-pane" id="paneShare">
@@ -803,7 +814,7 @@
       <div class="chan-list" id="chanList"></div>
     </div>
 
-    <button class="confirm" id="chanUseBtn" type="button">Use this map</button>
+    <button class="confirm" id="chanUseBtn" type="button">Create this map</button>
   </div>
 
   <!-- ── Tab: join someone else's channel ────────────────── -->
@@ -1025,12 +1036,12 @@ function renderMarkers(rows) {
     bounds.push(ll);
 
     const accRow = (typeof r.accuracy === "number")
-      ? "<br>± <span>" + Math.round(r.accuracy) + " m</span>" : "";
+      ? "<br>Precision: <span>±" + Math.round(r.accuracy) + " m</span>" : "";
     const popup =
       '<div class="pop-name ' + (isMe ? "me" : "") + '">' + escapeHtml(r.name) + (isMe ? " (you)" : "") + "</div>" +
-      '<div class="pop-row">lat <span>' + r.latitude.toFixed(6) + "</span><br>" +
-      "lng <span>" + r.longitude.toFixed(6) + "</span>" + accRow + "<br>" +
-      "seen <span>" + relTime(r.recorded_at) + "</span></div>" +
+      '<div class="pop-row">Latitude: <span>' + r.latitude.toFixed(6) + "</span><br>" +
+      "Longitude: <span>" + r.longitude.toFixed(6) + "</span>" + accRow + "<br>" +
+      "Last log: <span>" + relTime(r.recorded_at) + "</span></div>" +
       (isMe ? '<button class="pop-del" type="button">Remove my pin</button>' : "");
 
     if (markers[r.name]) {
@@ -1313,9 +1324,6 @@ function openSheet(editing) {
   input.value = getName() || "";
   document.getElementById("nameErr").textContent = "";
   document.getElementById("sheetTitle").textContent = editing ? "Change your name" : "What's your name?";
-  document.getElementById("sheetHelp").textContent = editing
-    ? "Heads up: a new name creates a separate entry on the map — your old one stays put."
-    : "This tags your spot on the map and becomes your fixed ID. Every time you log, it updates the same entry.";
   document.getElementById("nameConfirm").textContent = editing ? "Save name" : "Start sharing";
   document.getElementById("scrim").classList.add("open");
   document.getElementById("sheet").classList.add("open");
@@ -1343,6 +1351,8 @@ function openChannelSheet(focusInput) {
   const input = document.getElementById("channelInput");
   input.value = "";
   document.getElementById("channelErr").textContent = "";
+  document.getElementById("chanNameErr").textContent = "";
+  document.getElementById("chanName").value = getName() || "";
   renderChannelList();
   renderChannelCode();
   paintNotifyHint();
@@ -1361,7 +1371,7 @@ function paintNotifyHint() {
   hint.hidden = false;
   text.textContent = Notification.permission === "granted"
     ? "You'll get an alert when someone logs new location"
-    : "Alerts turn on when you tap Use this map.";
+    : "Alerts turn on when you pick a map.";
 }
 // Toggle between the "My map" (share) and "Join a map" panes.
 function switchTab(tab) {
@@ -1403,7 +1413,21 @@ function switchChannel(code) {
   refresh(true);
   toast("Switched to " + formatCode(code));
 }
+// Read + save the name from the modal. Required on both tabs; returns false
+// (and shows an error) when it's empty so the caller can abort the commit.
+function commitName() {
+  const v = document.getElementById("chanName").value.trim();
+  if (!v) {
+    document.getElementById("chanNameErr").textContent = "Enter your name so others know who you are.";
+    return false;
+  }
+  document.getElementById("chanNameErr").textContent = "";
+  setName(v);
+  paintChip();
+  return true;
+}
 function confirmChannel() {
+  if (!commitName()) return;
   const v = cleanSuffix(document.getElementById("channelInput").value);
   if (!v) {
     document.getElementById("channelErr").textContent = "Enter the map code you were given.";
@@ -1420,10 +1444,12 @@ function confirmChannel() {
   closeSheet();
   toast("Joined " + formatCode(v));
 }
-// "Use this map" on the Create tab — accept the auto-created code and commit.
+// "Create this map" on the Create tab — accept the auto-created code and commit.
 function useThisMap() {
+  if (!commitName()) return;
   setOnboarded();
   requestNotifyPermission();
+  refresh(true);
   closeSheet();
 }
 function copyChannelTopic() {
@@ -1485,6 +1511,11 @@ document.addEventListener("click", e => {
 document.getElementById("mapChip").addEventListener("click", () => openChannelSheet());
 document.getElementById("channelConfirm").addEventListener("click", confirmChannel);
 document.getElementById("channelInput").addEventListener("keydown", e => { if (e.key === "Enter") confirmChannel(); });
+// Enter in the shared name field commits the currently-active tab.
+document.getElementById("chanName").addEventListener("keydown", e => {
+  if (e.key !== "Enter") return;
+  if (document.getElementById("paneJoin").hidden) useThisMap(); else confirmChannel();
+});
 // Live-format what they type into grouped uppercase (1BG-8H7-JK9).
 document.getElementById("channelInput").addEventListener("input", e => {
   e.target.value = formatCode(e.target.value);
