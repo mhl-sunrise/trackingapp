@@ -64,7 +64,23 @@
     pointer-events: none;
   }
   .hud > * { pointer-events: auto; }
-  .hud-actions { display: flex; gap: 10px; flex: none; }
+  .hud-actions { display: flex; align-items: center; gap: 10px; flex: none; }
+
+  /* the name chip yields space to the action group instead of pushing it
+     off-screen — it shrinks and ellipsises when the name is long */
+  #nameChip { max-width: none; flex: 0 1 auto; min-width: 60px; }
+
+  /* current-map pill — sized to its content so the full code always shows.
+     .chip.map-chip (specificity 0,2,0) beats the base .chip max-width below. */
+  .chip.map-chip {
+    flex: none;
+    height: 42px;
+    max-width: none;
+    padding: 0 14px;
+    gap: 7px;
+  }
+  .map-chip .map-ico { width: 15px; height: 15px; flex: none; color: var(--muted); }
+  .map-chip .who { flex: none; font-size: 12.5px; letter-spacing: 0.03em; overflow: visible; }
 
   .chip {
     display: inline-flex;
@@ -321,6 +337,35 @@
   }
 
   /* ---------- channel sheet ---------- */
+  .chan-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    margin: 2px 0 20px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--line);
+    border-radius: 13px;
+  }
+  .chan-tab {
+    flex: 1;
+    height: 42px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--ui);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.18s ease, color 0.18s ease;
+  }
+  .chan-tab:hover:not(.active) { color: #c9ced6; }
+  .chan-tab.active {
+    background: var(--signal);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+  }
+  .chan-pane[hidden] { display: none; }
   .chan-field {
     display: flex;
     align-items: center;
@@ -333,13 +378,6 @@
     transition: border-color 0.15s ease;
   }
   .chan-field:focus-within { border-color: var(--signal); }
-  .chan-field .chan-prefix {
-    font-family: var(--mono);
-    font-size: 15px;
-    color: var(--muted);
-    white-space: nowrap;
-    user-select: none;
-  }
   .chan-field input {
     flex: 1;
     min-width: 0;
@@ -348,28 +386,48 @@
     border: none;
     color: #fff;
     font-family: var(--mono);
-    font-size: 15px;
+    font-size: 14px;
     padding: 0 0 0 1px;
     outline: none;
   }
+  .chan-field .code-input {
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 16px;
+    padding-left: 2px;
+  }
+  .chan-field .code-input::placeholder { letter-spacing: 0.08em; color: var(--muted); }
   .chan-help {
-    margin: 16px 0 6px;
-    padding: 14px;
-    background: var(--chrome-2);
-    border: 1px solid var(--line);
-    border-radius: 14px;
+    margin: 18px 0 2px;
+    border-top: 1px solid var(--line);
   }
-  .chan-help .h {
-    font-size: 12.5px;
+  .chan-help summary {
+    display: flex;
+    align-items: center;
+    height: 46px;
+    font-size: 13px;
     font-weight: 600;
-    color: #d4d9df;
-    margin-bottom: 10px;
+    color: var(--muted);
+    cursor: pointer;
+    list-style: none;
+    transition: color 0.15s ease;
   }
+  .chan-help summary:hover { color: #c9ced6; }
+  .chan-help summary::-webkit-details-marker { display: none; }
+  .chan-help summary::after {
+    content: "›";
+    margin-left: auto;
+    font-size: 16px;
+    transform: rotate(90deg);
+    transition: transform 0.18s ease;
+  }
+  .chan-help[open] summary { color: #d4d9df; }
+  .chan-help[open] summary::after { transform: rotate(-90deg); }
   .chan-help ol {
-    margin: 0;
+    margin: 0 0 6px;
     padding-left: 18px;
     font-size: 12.5px;
-    line-height: 1.6;
+    line-height: 1.7;
     color: var(--muted);
   }
   .chan-help ol a { color: #9dbcff; }
@@ -377,34 +435,40 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    margin: 10px 0;
+    margin: 0 0 8px;
   }
   .chan-topic code {
     flex: 1;
     min-width: 0;
+    display: flex;
+    align-items: center;
+    height: 50px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-family: var(--mono);
-    font-size: 12px;
-    color: #d4d9df;
-    background: rgba(255, 255, 255, 0.06);
-    padding: 8px 10px;
-    border-radius: 8px;
+    font-size: 14px;
+    color: #e6e9ee;
+    background: var(--chrome-2);
+    border: 1.5px solid var(--line);
+    padding: 0 14px;
+    border-radius: 12px;
   }
   .chan-topic button {
     flex: none;
-    height: 32px;
-    padding: 0 13px;
-    border-radius: 8px;
-    border: 1px solid var(--line);
-    background: var(--signal);
-    color: #fff;
+    height: 50px;
+    padding: 0 18px;
+    border-radius: 12px;
+    border: 1.5px solid var(--line);
+    background: var(--chrome-2);
+    color: #e6e9ee;
     font-family: var(--ui);
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
   }
+  .chan-topic button:hover { background: #1c222b; border-color: rgba(255, 255, 255, 0.18); }
   .chan-topic button:active { transform: scale(0.97); }
 
   /* channel switcher */
@@ -446,23 +510,6 @@
     color: var(--muted);
   }
   .chan-chip .cc-x:hover { background: rgba(255, 255, 255, 0.10); color: #fff; }
-  .chan-new {
-    display: inline-flex;
-    align-items: center;
-    height: 34px;
-    padding: 0 15px;
-    margin-bottom: 16px;
-    border-radius: 999px;
-    border: 1.5px dashed var(--line);
-    background: transparent;
-    color: var(--muted);
-    font-family: var(--ui);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: border-color 0.12s ease, color 0.12s ease;
-  }
-  .chan-new:hover { color: #fff; border-color: rgba(255, 255, 255, 0.25); }
   .chan-join {
     display: flex;
     gap: 8px;
@@ -482,24 +529,40 @@
     cursor: pointer;
   }
   .chan-join-btn:active { transform: scale(0.98); }
+  .chan-join-btn.full {
+    width: 100%;
+    height: 54px;
+    margin-top: 12px;
+    border-radius: 14px;
+    font-size: 16px;
+  }
   .cc-label {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.07em;
     font-weight: 700;
     color: var(--muted);
-    margin: 16px 2px 8px;
+    margin: 18px 2px 8px;
   }
+  .chan-pane > .cc-label:first-child { margin-top: 0; }
   .cc-hint {
     font-size: 12.5px;
     line-height: 1.45;
     color: var(--muted);
-    margin: 9px 2px 4px;
+    margin: 0 2px;
   }
-  .chan-new {
-    width: 100%;
-    justify-content: center;
-    margin-top: 4px;
+  /* the error line only takes up space when it actually says something */
+  .chan-pane .err { min-height: 0; margin: 8px 2px 0; }
+  .chan-pane .err:empty { display: none; }
+  .chan-pane .err:empty + .cc-hint { margin-top: 8px; }
+  /* primary action sits apart from the content above it */
+  .chan-pane .confirm,
+  .chan-pane .chan-join-btn.full { margin-top: 20px; }
+
+  /* mobile: the zoom buttons sit right under the Log button and collide with it,
+     so hide them — pinch-to-zoom covers it on touch devices anyway */
+  @media (max-width: 639px) {
+    .leaflet-control-zoom { display: none; }
   }
 
   /* desktop: centered modal instead of a full-width bottom sheet */
@@ -634,11 +697,12 @@
     <span class="edit">✎</span>
   </button>
   <div class="hud-actions">
-    <button class="icon-btn" id="channelBtn" aria-label="Settings">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.24-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281Z"/>
-        <path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
+    <button class="chip map-chip" id="mapChip" aria-label="Current map — tap to change">
+      <svg class="map-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20 10c0 6-8 11-8 11s-8-5-8-11a8 8 0 0 1 16 0Z"/>
+        <circle cx="12" cy="10" r="2.6"/>
       </svg>
+      <span class="who" id="mapLabel">···</span>
     </button>
     <button class="icon-btn" id="refreshBtn" aria-label="Refresh map">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -672,54 +736,44 @@
   <button class="confirm" id="nameConfirm">Start sharing</button>
 </div>
 
-<div class="sheet" id="welcomeSheet">
-  <div class="grip"></div>
-  <h2>Pick a channel</h2>
-  <p>A channel is a private space for a group's pins and alerts. Start your own and share the code, or join one someone gave you.</p>
-  <button class="confirm" id="startNewBtn">Start a new channel</button>
-  <button class="confirm ghost" id="joinBtn">Join with a code</button>
-</div>
-
 <div class="sheet" id="channelSheet">
   <div class="grip"></div>
-  <h2>Your channel</h2>
-  <p>A channel is your private group — everyone with the same code shares this map and gets each other's alerts. Nobody can find it unless you give them the code.</p>
 
-  <div class="cc-label">Your channel code</div>
-  <div class="chan-topic">
-    <code id="chanTopicCode">location-channel-…</code>
-    <button id="chanCopyBtn" type="button">Copy</button>
-  </div>
-  <div class="cc-hint">Send this code to whoever you want on the map with you.</div>
-
-  <div class="chan-switch" id="chanSwitch" hidden>
-    <div class="cc-label">Switch channel</div>
-    <div class="chan-list" id="chanList"></div>
+  <div class="chan-tabs" role="tablist">
+    <button class="chan-tab active" id="tabShareBtn" data-tab="share" type="button" role="tab">Create a map</button>
+    <button class="chan-tab" id="tabJoinBtn" data-tab="join" type="button" role="tab">Join a map</button>
   </div>
 
-  <button class="chan-new" id="chanNewBtn" type="button">+ Start a fresh channel</button>
-
-  <div class="cc-label">Join someone's channel</div>
-  <div class="chan-join">
-    <div class="chan-field">
-      <span class="chan-prefix">location-channel-</span>
-      <input id="channelInput" type="text" inputmode="text" autocomplete="off" autocapitalize="off"
-             spellcheck="false" placeholder="paste their code" maxlength="32" />
+  <!-- ── Tab: share my own channel ───────────────────────── -->
+  <div class="chan-pane" id="paneShare">
+    <div class="cc-label">Your map code</div>
+    <div class="chan-topic">
+      <code id="chanTopicCode">···</code>
+      <button id="chanCopyBtn" type="button">Copy</button>
     </div>
-    <button class="chan-join-btn" id="channelConfirm" type="button">Join</button>
-  </div>
-  <div class="err" id="channelErr"></div>
+    <div class="cc-hint">Anyone you share this code with joins your map.</div>
 
-  <div class="chan-help">
-    <div class="h">Get these alerts on your phone</div>
-    <ol>
-      <li>Install the free <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a> app (iOS / Android), or use any browser.</li>
-      <li>In ntfy, subscribe to your code above (tap <b>Copy</b>, then paste it in).</li>
-      <li><a id="chanTopicLink" href="https://ntfy.sh" target="_blank" rel="noopener">Open it on ntfy.sh ↗</a> to test it now.</li>
-    </ol>
+    <div class="chan-switch" id="chanSwitch" hidden>
+      <div class="cc-label">Your maps</div>
+      <div class="chan-list" id="chanList"></div>
+    </div>
+
+    <div class="cc-hint" id="notifyHint" hidden>🔔 You'll get an alert here when someone on this map moves.</div>
+
+    <button class="confirm" id="chanUseBtn" type="button">Use this map</button>
   </div>
 
-  <button class="confirm" id="channelDone">Done</button>
+  <!-- ── Tab: join someone else's channel ────────────────── -->
+  <div class="chan-pane" id="paneJoin" hidden>
+    <div class="cc-label">Enter a code</div>
+    <div class="chan-field">
+      <input id="channelInput" class="code-input" type="text" inputmode="text" autocomplete="off" autocapitalize="characters"
+             spellcheck="false" placeholder="1BG-8H7-JK9" maxlength="13" />
+    </div>
+    <div class="err" id="channelErr"></div>
+    <div class="cc-hint">Paste the code a friend shared with you.</div>
+    <button class="chan-join-btn full" id="channelConfirm" type="button">Join this map</button>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
@@ -733,13 +787,12 @@ const SUPABASE_URL = "https://qqgeykgjmhgogcxosnwz.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxZ2V5a2dqbWhnb2djeG9zbnd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyNjI4NjcsImV4cCI6MjA5NzgzODg2N30.Pzuza33yvcyXN_p7X6AS4r582AS88TOS2eR42P3Ua9Y";   // anon public
 
 const TABLE = "locations";
-const REFRESH_MS = 20000;   // auto-refresh every 20s
+const REFRESH_MS = 20000;   // fallback poll; Supabase Realtime drives instant updates
 
-// Notifications are grouped into "channels". The push topic is always
-// CHANNEL_PREFIX + the user's own code, e.g. location-channel-myteam.
-// Anyone subscribed to that topic in ntfy gets an alert on each new log.
-const NTFY_SERVER = "https://ntfy.sh";        // push server — works with any ntfy instance
-const CHANNEL_PREFIX = "location-channel-";    // every channel topic starts with this
+// Pins and alerts are grouped into "maps". A map is just a shared 9-character
+// code; only people who have it see the same pins. It's shown grouped for
+// readability (e.g. 1BG-8H7-JK9) but stored/compared without the dashes.
+const CODE_LEN = 9;
 /* ============================================================ */
 
 const NAME_KEY = "beacon_name";
@@ -788,10 +841,16 @@ function getChannel() {
   catch { return memChannel; }
 }
 function setChannel(c) {
+  c = normCode(c);                  // store the canonical form so codes always match
   memChannel = c;
   try { localStorage.setItem(CHANNEL_KEY, c); } catch {}
   registerChannel(c);
   paintChannel();
+  // A different map is a different set of people — re-seed notification state so
+  // the first load of the new map doesn't fire alerts for pins already there.
+  seenAt = {};
+  notifyPrimed = false;
+  subscribeRealtime();
 }
 
 /* ---------- known-channels list (for quick switching) ---------- */
@@ -826,24 +885,28 @@ function forgetChannel(code) {
 function ensureChannel() {
   if (!getChannel()) setChannel(randomSuffix());
 }
-function randomSuffix(len = 6) {
-  const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+function randomSuffix(len = CODE_LEN) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   let s = "";
   for (let i = 0; i < len; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
   return s;
 }
-// Normalise a user-typed code into a valid ntfy topic suffix. Tolerates a
-// pasted full topic ("location-channel-foo") and strips illegal characters.
-function cleanSuffix(v) {
-  v = String(v).trim().toLowerCase();
-  if (v.startsWith(CHANNEL_PREFIX)) v = v.slice(CHANNEL_PREFIX.length);
-  return v.replace(/[^a-z0-9_-]/g, "").replace(/^[-_]+|[-_]+$/g, "").slice(0, 32);
+// Canonical form used for storage and matching: uppercase, alphanumeric only,
+// no separators. So "1bg-8h7-jk9" and "1BG8H7JK9" resolve to the same map.
+function normCode(v) {
+  return String(v).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12);
 }
-function ntfyTopic() { return CHANNEL_PREFIX + (getChannel() || ""); }
-function ntfyUrl() { return NTFY_SERVER.replace(/\/+$/, "") + "/" + ntfyTopic(); }
+// Pretty form for display/sharing: groups of three joined by dashes.
+function formatCode(v) {
+  const c = normCode(v);
+  return c ? c.match(/.{1,3}/g).join("-") : "";
+}
+// Normalise whatever the user typed/pasted into the canonical code.
+function cleanSuffix(v) { return normCode(v); }
+function channelCode() { return formatCode(getChannel() || ""); }
 function paintChannel() {
-  const btn = document.getElementById("channelBtn");
-  if (btn) btn.title = "Channel: " + ntfyTopic();
+  const label = document.getElementById("mapLabel");
+  if (label) label.textContent = channelCode();
 }
 
 /* ---------- onboarding flag (shown once) ---------- */
@@ -957,6 +1020,9 @@ function renderMarkers(rows) {
 let hasChannelCol = true;
 let hasAccuracyCol = true;
 let didFit = false;
+let seenAt = {};          // name -> last recorded_at (ms) seen, for new-pin detection
+let notifyPrimed = false; // first load of a map seeds state without firing alerts
+let rtChannel = null;     // active Supabase Realtime subscription
 async function refresh(fit = false) {
   if (!sb) return;
   // Only load pins for this device's channel, so groups sharing one table don't
@@ -969,11 +1035,43 @@ async function refresh(fit = false) {
     res = await sb.from(TABLE).select("*");
   }
   if (res.error) { toast("Couldn't load locations. Check your connection.", true); return; }
-  const bounds = renderMarkers(res.data || []);
+  const rows = res.data || [];
+  maybeNotify(rows);
+  const bounds = renderMarkers(rows);
   if ((fit || !didFit) && bounds.length) {
     map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 });
     didFit = true;
   }
+}
+
+// Fire a native notification when someone else's pin is new since we last saw
+// it. The first refresh after (re)joining a map only seeds state, so we never
+// alert for pins that were already on the map when you arrived.
+function maybeNotify(rows) {
+  const me = getName();
+  const fresh = [];
+  rows.forEach(r => {
+    const t = Date.parse(r.recorded_at || "") || 0;
+    const prev = seenAt[r.name];
+    if (notifyPrimed && r.name !== me && (prev === undefined || t > prev)) fresh.push(r.name);
+    if (prev === undefined || t > prev) seenAt[r.name] = t;
+  });
+  if (!notifyPrimed) { notifyPrimed = true; return; }
+  if (fresh.length === 1) notify("Beacon", fresh[0] + " logged a new location");
+  else if (fresh.length > 1) notify("Beacon", fresh.length + " people logged new locations");
+}
+
+// Listen for live inserts/updates on this map and refresh instantly, instead of
+// waiting for the next poll. Needs Realtime enabled on the table in Supabase;
+// if it isn't, the periodic poll below still keeps things current.
+function subscribeRealtime() {
+  if (!sb) return;
+  if (rtChannel) { try { sb.removeChannel(rtChannel); } catch (e) {} rtChannel = null; }
+  const opts = { event: "*", schema: "public", table: TABLE };
+  if (hasChannelCol) opts.filter = "channel=eq." + getChannel();
+  rtChannel = sb.channel("rt-" + getChannel())
+    .on("postgres_changes", opts, () => refresh())
+    .subscribe();
 }
 
 /* ---------- logging ---------- */
@@ -1046,11 +1144,30 @@ function isMissingColumn(error, col) {
   return error.code === "PGRST204" || (msg.includes(col) && (msg.includes("column") || msg.includes("schema cache")));
 }
 
-// Fire-and-forget push to this device's channel topic. Never blocks the save.
-function notifyNtfy(name) {
-  try {
-    fetch(ntfyUrl(), { method: "POST", body: name + " has just logged new location" }).catch(() => {});
-  } catch (e) {}
+/* ---------- in-app notifications (no server, no ntfy) ----------
+   When someone else on your map logs a new spot, the browser shows a native
+   notification. This works while the app is open or recently backgrounded;
+   true closed-app push would need a server, which we intentionally skip. */
+function notifySupported() { return "Notification" in window; }
+
+// Ask once, on a user gesture (picking a map). Safe to call repeatedly.
+function requestNotifyPermission() {
+  if (!notifySupported() || Notification.permission !== "default") return;
+  try { Notification.requestPermission().catch(() => {}); } catch (e) {}
+}
+
+// Show a notification, preferring the service worker so it behaves well on
+// mobile/PWA, falling back to a plain page notification.
+function notify(title, body) {
+  if (!notifySupported() || Notification.permission !== "granted") return;
+  const opts = { body, icon: "icon-192.png", badge: "icon-192.png", tag: "beacon-move" };
+  if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+    navigator.serviceWorker.ready.then(reg => reg.showNotification(title, opts)).catch(() => {
+      try { new Notification(title, opts); } catch (e) {}
+    });
+  } else {
+    try { new Notification(title, opts); } catch (e) {}
+  }
 }
 
 function logLocation() {
@@ -1067,7 +1184,6 @@ function logLocation() {
       const error = await saveLocation(name, latitude, longitude, accuracy);
       setBusy(false);
       if (error) { toast("Save failed. Check your table's access rules.", true); return; }
-      notifyNtfy(name);
       await refresh();
       map.flyTo([latitude, longitude], 17, { duration: 0.8 });
       const acc = Math.round(accuracy);
@@ -1157,27 +1273,10 @@ function closeSheet() {
   document.getElementById("scrim").classList.remove("open");
   document.getElementById("sheet").classList.remove("open");
   document.getElementById("channelSheet").classList.remove("open");
-  document.getElementById("welcomeSheet").classList.remove("open");
   document.getElementById("nameInput").blur();
   document.getElementById("channelInput").blur();
 }
 
-/* ---------- first-run onboarding ---------- */
-// Brand-new users are asked to start their own channel (the random one we just
-// generated) or join an existing one by code. Shown only once.
-function openWelcomeSheet() {
-  setOnboarded();
-  document.getElementById("scrim").classList.add("open");
-  document.getElementById("welcomeSheet").classList.add("open");
-}
-function startNewChannel() {
-  closeSheet();
-  openChannelSheet();          // reveal your auto-created code + how to get alerts
-}
-function joinChannel() {
-  closeSheet();
-  openChannelSheet(true);      // empty field to type the code you were given
-}
 function confirmName() {
   const v = document.getElementById("nameInput").value.trim();
   if (!v) { document.getElementById("nameErr").textContent = "Enter a name to continue."; return; }
@@ -1193,10 +1292,30 @@ function openChannelSheet(focusInput) {
   input.value = "";
   document.getElementById("channelErr").textContent = "";
   renderChannelList();
-  renderChannelHelp();
+  renderChannelCode();
+  paintNotifyHint();
+  // Opening with intent to join lands on the Join tab.
+  switchTab(focusInput ? "join" : "share");
   document.getElementById("scrim").classList.add("open");
   document.getElementById("channelSheet").classList.add("open");
   if (focusInput) setTimeout(() => input.focus(), 280);
+}
+// Reassure that alerts are on (or coming). Hidden where notifications can't run.
+function paintNotifyHint() {
+  const hint = document.getElementById("notifyHint");
+  if (!hint) return;
+  if (!notifySupported() || Notification.permission === "denied") { hint.hidden = true; return; }
+  hint.hidden = false;
+  hint.textContent = Notification.permission === "granted"
+    ? "🔔 You'll get an alert here when someone on this map moves."
+    : "🔔 Alerts turn on when you tap Use this map.";
+}
+// Toggle between the "My map" (share) and "Join a map" panes.
+function switchTab(tab) {
+  document.querySelectorAll(".chan-tab").forEach(b =>
+    b.classList.toggle("active", b.dataset.tab === tab));
+  document.getElementById("paneShare").hidden = tab !== "share";
+  document.getElementById("paneJoin").hidden = tab !== "join";
 }
 // One tappable chip per known channel; the active one is highlighted, the rest
 // carry an × to forget them.
@@ -1214,53 +1333,49 @@ function renderChannelList() {
     chip.type = "button";
     chip.className = "chan-chip" + (active ? " active" : "");
     chip.dataset.code = code;
-    chip.innerHTML = '<span class="cc-name">' + escapeHtml(code) + "</span>" +
+    chip.innerHTML = '<span class="cc-name">' + escapeHtml(formatCode(code)) + "</span>" +
       (active ? "" : '<span class="cc-x" data-x="' + escapeHtml(code) + '">×</span>');
     list.appendChild(chip);
   });
 }
-// Show the active channel's topic + subscribe link in the help block.
-function renderChannelHelp() {
-  const topic = CHANNEL_PREFIX + (getChannel() || "");
-  document.getElementById("chanTopicCode").textContent = topic;
-  document.getElementById("chanTopicLink").href =
-    NTFY_SERVER.replace(/\/+$/, "") + "/" + topic;
+// Paint the active map's shareable code.
+function renderChannelCode() {
+  document.getElementById("chanTopicCode").textContent = channelCode();
 }
 function switchChannel(code) {
   if (!code || code === getChannel()) return;
   setChannel(code);
   renderChannelList();
-  renderChannelHelp();
+  renderChannelCode();
   refresh(true);
-  toast("Switched to " + CHANNEL_PREFIX + code);
-}
-function newChannel() {
-  const code = randomSuffix();
-  setChannel(code);
-  document.getElementById("channelInput").value = "";
-  document.getElementById("channelErr").textContent = "";
-  renderChannelList();
-  renderChannelHelp();
-  refresh(true);
-  toast("New channel: " + CHANNEL_PREFIX + code);
+  toast("Switched to " + formatCode(code));
 }
 function confirmChannel() {
   const v = cleanSuffix(document.getElementById("channelInput").value);
   if (!v) {
-    document.getElementById("channelErr").textContent = "Enter a code (letters, numbers, - or _).";
+    document.getElementById("channelErr").textContent = "Enter the map code you were given.";
     return;
   }
   setChannel(v);
   document.getElementById("channelInput").value = "";
   document.getElementById("channelErr").textContent = "";
   renderChannelList();
-  renderChannelHelp();
+  renderChannelCode();
   refresh(true);
-  toast("Joined " + CHANNEL_PREFIX + v);
+  setOnboarded();      // picked a map — that's the commit
+  requestNotifyPermission();
+  closeSheet();
+  toast("Joined " + formatCode(v));
+}
+// "Use this map" on the Create tab — accept the auto-created code and commit.
+function useThisMap() {
+  setOnboarded();
+  requestNotifyPermission();
+  closeSheet();
 }
 function copyChannelTopic() {
-  const topic = CHANNEL_PREFIX + (getChannel() || "");
-  const done = () => toast("Topic copied — paste it into the ntfy app");
+  const topic = channelCode();
+  const done = () => toast("Map code copied — share it with your group");
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(topic).then(done).catch(() => fallbackCopy(topic, done));
   } else {
@@ -1302,21 +1417,29 @@ document.getElementById("logBtn").addEventListener("click", logLocation);
 document.getElementById("nameChip").addEventListener("click", () => openSheet(!!getName()));
 document.getElementById("nameConfirm").addEventListener("click", confirmName);
 document.getElementById("nameInput").addEventListener("keydown", e => { if (e.key === "Enter") confirmName(); });
-document.getElementById("scrim").addEventListener("click", closeSheet);
+// The channel sheet must be dismissed by creating or joining a map — not by
+// tapping the backdrop. Other sheets still close on scrim tap.
+document.getElementById("scrim").addEventListener("click", () => {
+  if (document.getElementById("channelSheet").classList.contains("open")) return;
+  closeSheet();
+});
 // The delete button lives inside Leaflet popups, which are re-created on open,
 // so listen via delegation rather than binding each one.
 document.addEventListener("click", e => {
   const btn = e.target.closest && e.target.closest(".pop-del");
   if (btn) armOrDelete(btn);
 });
-document.getElementById("channelBtn").addEventListener("click", () => openChannelSheet());
-document.getElementById("startNewBtn").addEventListener("click", startNewChannel);
-document.getElementById("joinBtn").addEventListener("click", joinChannel);
+document.getElementById("mapChip").addEventListener("click", () => openChannelSheet());
 document.getElementById("channelConfirm").addEventListener("click", confirmChannel);
 document.getElementById("channelInput").addEventListener("keydown", e => { if (e.key === "Enter") confirmChannel(); });
+// Live-format what they type into grouped uppercase (1BG-8H7-JK9).
+document.getElementById("channelInput").addEventListener("input", e => {
+  e.target.value = formatCode(e.target.value);
+});
 document.getElementById("chanCopyBtn").addEventListener("click", copyChannelTopic);
-document.getElementById("chanNewBtn").addEventListener("click", newChannel);
-document.getElementById("channelDone").addEventListener("click", closeSheet);
+document.querySelectorAll(".chan-tab").forEach(b =>
+  b.addEventListener("click", () => switchTab(b.dataset.tab)));
+document.getElementById("chanUseBtn").addEventListener("click", useThisMap);
 // Tap a chip to switch; tap its × to forget that channel.
 document.getElementById("chanList").addEventListener("click", e => {
   const x = e.target.closest("[data-x]");
@@ -1331,14 +1454,16 @@ document.getElementById("refreshBtn").addEventListener("click", () => {
 });
 
 /* ---------- init ---------- */
-const firstRun = !getChannel();     // no channel stored yet → brand-new user
-ensureChannel();
+ensureChannel();                    // give them a code to share if they create
 registerChannel(getChannel());      // make sure the active channel is in the list
 paintChip();
 paintChannel();
 if (!configured) document.getElementById("setupBanner").style.display = "block";
-if (firstRun && !isOnboarded()) openWelcomeSheet();   // ask: start new or join
-else setOnboarded();                                  // existing users: don't prompt
+// Until the user has explicitly picked a map (created or joined), force the
+// picker open — it can't be dismissed, and it stays gone once they commit, even
+// across reloads.
+if (!isOnboarded()) openChannelSheet();
+subscribeRealtime();                 // live updates (setChannel only runs for brand-new devices)
 refresh(true);
 setInterval(() => refresh(false), REFRESH_MS);
 

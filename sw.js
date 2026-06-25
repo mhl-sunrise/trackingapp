@@ -1,5 +1,5 @@
 /* Beacon service worker — offline app shell + installability. */
-const CACHE = "beacon-v10";
+const CACHE = "beacon-v26";
 const ASSETS = [
   "./",
   "./index.html",
