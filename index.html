@@ -346,6 +346,12 @@
     margin-top: 10px;
   }
 
+  /* name sheet rhythm: title → input → button, error only when present */
+  #sheet h2 { margin-bottom: 18px; }
+  #sheet .err { min-height: 0; margin: 8px 2px 0; }
+  #sheet .err:empty { display: none; }
+  #sheet .confirm { margin-top: 16px; }
+
   /* ---------- channel sheet ---------- */
   .chan-tabs {
     display: flex;
@@ -556,6 +562,12 @@
     margin: 18px 2px 8px;
   }
   .chan-pane > .cc-label:first-child { margin-top: 0; }
+  /* name section sits apart from the map-code section below it */
+  .chan-name-block {
+    margin-bottom: 18px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--line);
+  }
   .name-label { margin-top: 2px; }
   /* the name error only reserves space when it has something to say */
   #chanNameErr { margin: 8px 2px 0; min-height: 0; }
@@ -793,12 +805,14 @@
   </div>
 
   <!-- shared by both tabs: who you are on the map -->
-  <div class="cc-label name-label">Your name</div>
-  <div class="chan-field">
-    <input id="chanName" type="text" inputmode="text" autocomplete="off" autocapitalize="words"
-           spellcheck="false" placeholder="e.g. Martin" maxlength="40" />
+  <div class="chan-name-block">
+    <div class="cc-label name-label">Your name</div>
+    <div class="chan-field">
+      <input id="chanName" type="text" inputmode="text" autocomplete="off" autocapitalize="words"
+             spellcheck="false" placeholder="Martin" maxlength="40" />
+    </div>
+    <div class="err" id="chanNameErr"></div>
   </div>
-  <div class="err" id="chanNameErr"></div>
 
   <!-- ── Tab: share my own channel ───────────────────────── -->
   <div class="chan-pane" id="paneShare">
@@ -1324,7 +1338,7 @@ function openSheet(editing) {
   input.value = getName() || "";
   document.getElementById("nameErr").textContent = "";
   document.getElementById("sheetTitle").textContent = editing ? "Change your name" : "What's your name?";
-  document.getElementById("nameConfirm").textContent = editing ? "Save name" : "Start sharing";
+  document.getElementById("nameConfirm").textContent = editing ? "Save name" : "Log my location";
   document.getElementById("scrim").classList.add("open");
   document.getElementById("sheet").classList.add("open");
   setTimeout(() => input.focus(), 280);
