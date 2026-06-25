@@ -671,16 +671,24 @@
     border-bottom: 1px solid var(--line);
   }
   .pop-name.me { color: #fff; }
-  /* close button: white, padded into the card's corner, easy to tap */
+  /* close button: a centered glyph tucked into the card's top-right corner,
+     vertically aligned with the title row */
   .leaflet-popup-close-button {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    top: 10px !important;
+    right: 10px !important;
+    width: 28px !important;
+    height: 28px !important;
+    padding: 0 !important;
+    font-size: 20px !important;
+    line-height: 1 !important;
     color: var(--muted) !important;
-    font-size: 22px !important;
-    width: 30px !important;
-    height: 30px !important;
-    padding: 4px 8px 0 0 !important;
-    transition: color 0.12s ease;
+    border-radius: 8px;
+    transition: color 0.12s ease, background 0.12s ease;
   }
-  .leaflet-popup-close-button:hover { color: #fff !important; }
+  .leaflet-popup-close-button:hover { color: #fff !important; background: rgba(255, 255, 255, 0.08); }
   .pop-row {
     font-family: var(--mono);
     font-size: 12px;
