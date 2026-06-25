@@ -270,18 +270,21 @@
   .scrim.open { opacity: 1; pointer-events: auto; }
 
   .sheet {
-    position: absolute;
-    left: 0; right: 0; bottom: 0;
+    position: fixed;
+    left: 0; right: 0;
+    /* --kb is the on-screen keyboard height (set from JS via visualViewport);
+       lifting the sheet by it keeps the input + button above the keyboard */
+    bottom: var(--kb, 0px);
     z-index: 2001;
     background: var(--chrome);
     border-top-left-radius: 22px;
     border-top-right-radius: 22px;
     padding: 10px 22px calc(env(safe-area-inset-bottom, 0px) + 24px);
     transform: translateY(110%);
-    transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), bottom 0.2s ease;
     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4);
     color: #fff;
-    max-height: 90vh;
+    max-height: calc(100dvh - var(--kb, 0px) - 12px);
     overflow-y: auto;
   }
   .sheet.open { transform: translateY(0); }
@@ -584,6 +587,7 @@
      so hide them — pinch-to-zoom covers it on touch devices anyway */
   @media (max-width: 639px) {
     .leaflet-control-zoom { display: none; }
+    .leaflet-control-attribution { display: none; }
   }
 
   /* desktop: centered modal instead of a full-width bottom sheet */
@@ -645,7 +649,8 @@
     white-space: nowrap;
   }
   .leaflet-tooltip.tag::before { display: none; }
-  .leaflet-tooltip.tag.tag-me { color: #fdba74; border-color: rgba(249, 115, 22, 0.55); }
+  /* names are always white on black; "me" only differs by a subtle orange border */
+  .leaflet-tooltip.tag.tag-me { color: #fff; border-color: rgba(249, 115, 22, 0.55); }
 
   .leaflet-popup-content-wrapper {
     background: var(--chrome);
@@ -664,7 +669,17 @@
     padding-bottom: 9px;
     border-bottom: 1px solid var(--line);
   }
-  .pop-name.me { color: var(--me); }
+  .pop-name.me { color: #fff; }
+  /* close button: white, padded into the card's corner, easy to tap */
+  .leaflet-popup-close-button {
+    color: var(--muted) !important;
+    font-size: 22px !important;
+    width: 30px !important;
+    height: 30px !important;
+    padding: 4px 8px 0 0 !important;
+    transition: color 0.12s ease;
+  }
+  .leaflet-popup-close-button:hover { color: #fff !important; }
   .pop-row {
     font-family: var(--mono);
     font-size: 12px;
@@ -1481,6 +1496,21 @@ document.getElementById("refreshBtn").addEventListener("click", () => {
   b.classList.add("spinning");
   refresh(true).finally(() => setTimeout(() => b.classList.remove("spinning"), 600));
 });
+
+/* ---------- keep sheets above the on-screen keyboard ----------
+   When a mobile keyboard opens it shrinks the visual viewport. We publish that
+   gap as --kb so the bottom sheet (input + button) lifts above the keyboard. */
+(function trackKeyboard() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const apply = () => {
+    const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    document.documentElement.style.setProperty("--kb", kb + "px");
+  };
+  vv.addEventListener("resize", apply);
+  vv.addEventListener("scroll", apply);
+  apply();
+})();
 
 /* ---------- init ---------- */
 ensureChannel();                    // give them a code to share if they create
