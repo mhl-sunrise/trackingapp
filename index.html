@@ -676,7 +676,7 @@
 
   .leaflet-tooltip.tag {
     background: var(--chrome);
-    border: 1px solid var(--line);
+    border: none;
     color: #fff;
     font-family: var(--mono);
     font-size: 11px;
@@ -687,8 +687,8 @@
     white-space: nowrap;
   }
   .leaflet-tooltip.tag::before { display: none; }
-  /* names are always white on black; "me" only differs by a subtle orange border */
-  .leaflet-tooltip.tag.tag-me { color: #fff; border-color: rgba(249, 115, 22, 0.55); }
+  /* names are always white on black, borderless — mine and others look identical */
+  .leaflet-tooltip.tag.tag-me { color: #fff; }
 
   .leaflet-popup-content-wrapper {
     background: var(--chrome);
@@ -993,7 +993,7 @@
     <div class="cc-label">Your map code</div>
     <div class="chan-topic">
       <code id="chanTopicCode">···</code>
-      <button id="chanNewBtn" type="button">+ New</button>
+      <button id="chanNewBtn" type="button">New</button>
       <button id="chanCopyBtn" type="button">Copy</button>
     </div>
     <div class="cc-hint">Anyone you share this code with joins your map.</div>

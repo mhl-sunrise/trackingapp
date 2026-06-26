@@ -1,5 +1,5 @@
 /* Tracker service worker — offline app shell + installability. */
-const CACHE = "beacon-v60";
+const CACHE = "beacon-v61";
 const ASSETS = [
   "./",
   "./index.html",
