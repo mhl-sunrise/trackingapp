@@ -1,6 +1,6 @@
 {
-  "name": "Beacon",
-  "short_name": "Beacon",
+  "name": "Tracker",
+  "short_name": "Tracker",
   "description": "Live location sharing on a map.",
   "start_url": "./",
   "scope": "./",

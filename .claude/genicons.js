@@ -1,4 +1,4 @@
-// One-off: generate Beacon PWA icons (blue field + white beacon core & ring).
+// One-off: generate Tracker PWA icons (blue field + white beacon core & ring).
 // Dependency-free PNG encoder using Node's built-in zlib.
 const fs = require("fs");
 const zlib = require("zlib");

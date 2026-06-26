@@ -22,7 +22,7 @@
 " />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
 <meta name="theme-color" content="#0E1116" />
-<title>Beacon</title>
+<title>Tracker</title>
 
 <!-- PWA -->
 <link rel="manifest" href="manifest.webmanifest" />
@@ -31,7 +31,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Beacon" />
+<meta name="apple-mobile-web-app-title" content="Tracker" />
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"
       integrity="sha512-Zcn6bjR/8RZbLEpLIeOwNtzREBAJnUKESxces60Mpoj+2okopSAcSUIUOseddDm0cxnGQzxIR7vJgsLZbdLE3w=="
@@ -241,7 +241,7 @@
     transition: transform 0.12s ease, opacity 0.2s ease;
   }
   .beacon:active { transform: scale(0.985); }
-  .beacon:disabled { opacity: 0.85; cursor: default; }
+  .beacon:disabled { cursor: default; }
   .beacon .core {
     position: relative;
     width: 13px;
@@ -614,6 +614,13 @@
   .chan-pane .confirm,
   .chan-pane .chan-join-btn.full { margin-top: 20px; }
 
+  /* Grow each tile by 1px so neighbours overlap, hiding the white hairline seams
+     Leaflet leaves between tiles on fractional pixel origins. --tile-size is set in
+     JS to match the active layer (512 for MapTiler @2x, 256 for the free fallbacks). */
+  .leaflet-tile {
+    width: calc(var(--tile-size, 256px) + 1px) !important;
+    height: calc(var(--tile-size, 256px) + 1px) !important;
+  }
   /* mobile: the zoom buttons sit right under the Log button and collide with it,
      so hide them — pinch-to-zoom covers it on touch devices anyway */
   @media (max-width: 639px) {
@@ -825,16 +832,16 @@
 
 <!-- Install gate: shown only in a mobile browser when not yet installed. The
      inline script decides visibility immediately, before the app initialises. -->
-<div id="installGate" class="install-gate" role="dialog" aria-modal="true" aria-label="Install Beacon">
+<div id="installGate" class="install-gate" role="dialog" aria-modal="true" aria-label="Install Tracker">
   <div class="ig-card">
-    <img class="ig-icon" src="icon-192.png" alt="Beacon" width="76" height="76" />
-    <h1 class="ig-title">Install Beacon</h1>
-    <p class="ig-sub">Add Beacon to your home screen for live location alerts and a full-screen map. On iPhone, notifications only work once it's installed.</p>
+    <img class="ig-icon" src="icon-192.png" alt="Tracker" width="76" height="76" />
+    <h1 class="ig-title">Install Tracker</h1>
+    <p class="ig-sub">Add Tracker to your home screen for live location alerts and a full-screen map. On iPhone, notifications only work once it's installed.</p>
 
     <!-- Path 1: one-tap native install (Android/Chrome only, once the browser offers it) -->
     <div class="ig-opt" id="igOptQuick">
       <div class="ig-lead">Recommended</div>
-      <button class="ig-install" id="igInstallBtn" type="button">Install Beacon</button>
+      <button class="ig-install" id="igInstallBtn" type="button">Install Tracker</button>
     </div>
 
     <!-- Path 2: manual add-to-home-screen (always available; the only path on iOS) -->
@@ -854,7 +861,7 @@
       </div>
       <div class="ig-step">
         <span class="ig-num">3</span>
-        <span>Open <b>Beacon</b> from your home screen.</span>
+        <span>Open <b>Tracker</b> from your home screen.</span>
       </div>
     </div>
 
@@ -869,7 +876,7 @@
       </div>
       <div class="ig-step">
         <span class="ig-num">3</span>
-        <span>Open <b>Beacon</b> from your home screen.</span>
+        <span>Open <b>Tracker</b> from your home screen.</span>
       </div>
     </div>
 
@@ -1224,6 +1231,14 @@ function storedBaseMode() {
 let baseMode = storedBaseMode();
 let baseLayer = (baseMode === "satellite" ? makeSatelliteLayer() : makeStreetLayer()).addTo(map);
 
+// Feed the active layer's tile size to CSS so the seam-hiding overlap (see
+// .leaflet-tile) matches whichever provider is live.
+function applyTileSizeVar(layer) {
+  const ts = (layer.options && layer.options.tileSize) || 256;
+  map.getContainer().style.setProperty("--tile-size", ts + "px");
+}
+applyTileSizeVar(baseLayer);
+
 let tileWarned = false;
 function watchTileErrors(layer) {
   layer.on("tileerror", () => {
@@ -1240,6 +1255,7 @@ function setBaseMode(mode) {
   map.removeLayer(baseLayer);
   baseLayer = (mode === "satellite" ? makeSatelliteLayer() : makeStreetLayer()).addTo(map);
   baseLayer.bringToBack();
+  applyTileSizeVar(baseLayer);
   watchTileErrors(baseLayer);
   paintBaseToggle();
 }
@@ -1365,8 +1381,8 @@ function maybeNotify(rows) {
     if (prev === undefined || t > prev) seenAt[r.name] = t;
   });
   if (!notifyPrimed) { notifyPrimed = true; return; }
-  if (fresh.length === 1) notify("Beacon", fresh[0] + " logged a new location");
-  else if (fresh.length > 1) notify("Beacon", fresh.length + " people logged new locations");
+  if (fresh.length === 1) notify("Tracker", fresh[0] + " logged a new location");
+  else if (fresh.length > 1) notify("Tracker", fresh.length + " people logged new locations");
 }
 
 // Listen for live inserts/updates on this map and refresh instantly, instead of

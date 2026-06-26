@@ -1,5 +1,5 @@
 -- ============================================================================
--- Beacon — Supabase schema & migrations  (RPC-by-code, hardened model)
+-- Tracker — Supabase schema & migrations  (RPC-by-code, hardened model)
 -- Run in the Supabase dashboard: SQL Editor → New query → paste → Run.
 --
 -- Security model: the browser ships only the public anon key, so the table is
