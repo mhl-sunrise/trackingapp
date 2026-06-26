@@ -820,6 +820,8 @@
     </div>
     <div class="cc-hint">Anyone you share this code with joins your map.</div>
 
+    <button class="confirm ghost" id="chanNewBtn" type="button">+ New map code</button>
+
     <div class="chan-switch" id="chanSwitch" hidden>
       <div class="cc-label">Your maps</div>
       <div class="chan-list" id="chanList"></div>
@@ -1367,6 +1369,8 @@ function openChannelSheet(focusInput) {
   renderChannelList();
   renderChannelCode();
   paintNotifyHint();
+  pendingCode = null;                 // start by showing the active map's code
+  paintCreateBtn();
   // Opening with intent to join lands on the Join tab.
   switchTab(focusInput ? "join" : "share");
   document.getElementById("scrim").classList.add("open");
@@ -1412,15 +1416,34 @@ function renderChannelList() {
     list.appendChild(chip);
   });
 }
-// Paint the active map's shareable code.
+// A freshly-generated code awaiting "Create this map". While null, the Create
+// tab shows the active map's code (so it can be copied and shared).
+let pendingCode = null;
+function displayCode() { return formatCode(pendingCode || getChannel() || ""); }
+// Paint whichever code the Create tab is currently offering.
 function renderChannelCode() {
-  document.getElementById("chanTopicCode").textContent = channelCode();
+  document.getElementById("chanTopicCode").textContent = displayCode();
+}
+// The primary button creates the pending code, or just closes ("Done") when the
+// tab is simply showing the map you're already on.
+function paintCreateBtn() {
+  document.getElementById("chanUseBtn").textContent =
+    (pendingCode || !isOnboarded()) ? "Create this map" : "Done";
+}
+// Roll a brand-new map code to create. Doesn't switch yet — "Create this map"
+// commits it, so you can copy/share the code first or roll again.
+function newMapCode() {
+  pendingCode = randomSuffix();
+  renderChannelCode();
+  paintCreateBtn();
 }
 function switchChannel(code) {
   if (!code || code === getChannel()) return;
   setChannel(code);
+  pendingCode = null;
   renderChannelList();
   renderChannelCode();
+  paintCreateBtn();
   refresh(true);
   toast("Switched to " + formatCode(code));
 }
@@ -1455,16 +1478,19 @@ function confirmChannel() {
   closeSheet();
   toast("Joined " + formatCode(v));
 }
-// "Create this map" on the Create tab — accept the auto-created code and commit.
+// "Create this map" on the Create tab — switch to the pending code (if any) and
+// commit. With no pending code it just confirms the map you're already on.
 function useThisMap() {
   if (!commitName()) return;
+  if (pendingCode && normCode(pendingCode) !== getChannel()) setChannel(pendingCode);
+  pendingCode = null;
   setOnboarded();
   requestNotifyPermission();
   refresh(true);
   closeSheet();
 }
 function copyChannelTopic() {
-  const topic = channelCode();
+  const topic = displayCode();
   const done = () => toast("Map code copied — share it with your group");
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(topic).then(done).catch(() => fallbackCopy(topic, done));
@@ -1535,6 +1561,7 @@ document.getElementById("chanCopyBtn").addEventListener("click", copyChannelTopi
 document.querySelectorAll(".chan-tab").forEach(b =>
   b.addEventListener("click", () => switchTab(b.dataset.tab)));
 document.getElementById("chanUseBtn").addEventListener("click", useThisMap);
+document.getElementById("chanNewBtn").addEventListener("click", newMapCode);
 // Tap a chip to switch; tap its × to forget that channel.
 document.getElementById("chanList").addEventListener("click", e => {
   const x = e.target.closest("[data-x]");
