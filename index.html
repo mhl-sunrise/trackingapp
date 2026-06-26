@@ -723,8 +723,8 @@
   .pop-del.armed { background: #ef4444; color: #fff; border-color: #ef4444; }
   .pop-del:active { transform: scale(0.98); }
 
-  /* black & white base map — pins and the accuracy halo keep their colour */
-  .leaflet-tile-pane { filter: grayscale(1); }
+  /* satellite imagery shown in full colour so the pin can be checked against
+     real rooftops (grayscale was for the old abstract basemap) */
 
   .leaflet-control-attribution {
     font-size: 9px;
@@ -994,10 +994,11 @@ function setOnboarded() {
 const map = L.map("map", { zoomControl: false, attributionControl: true })
   .setView([48.15, 17.11], 6);   // Central Europe default
 
-const tiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-  subdomains: "abcd",
+// Satellite imagery (Esri World Imagery) — used so you can see whether your pin
+// lands on the right building. Note the {z}/{y}/{x} order (Esri's, not CARTO's).
+const tiles = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
   maxZoom: 19,
-  attribution: '&copy; OpenStreetMap &copy; CARTO',
+  attribution: 'Tiles &copy; Esri, Maxar, Earthstar Geographics',
 }).addTo(map);
 
 let tileWarned = false;
