@@ -1,5 +1,5 @@
 /* Tracker service worker — offline app shell + installability. */
-const CACHE = "beacon-v59";
+const CACHE = "beacon-v60";
 const ASSETS = [
   "./",
   "./index.html",
@@ -28,8 +28,21 @@ self.addEventListener("fetch", e => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
 
-  // Same-origin (the app shell): cache-first, then network (and cache the result).
   if (url.origin === location.origin) {
+    // The app-shell document: NETWORK-FIRST so a deploy is picked up on the very
+    // next load when online; fall back to cache only when offline. (Cache-first
+    // here served stale HTML/CSS for a load or two after every deploy.)
+    if (req.mode === "navigate" || req.destination === "document") {
+      e.respondWith(
+        fetch(req).then(res => {
+          const copy = res.clone();
+          caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
+          return res;
+        }).catch(() => caches.match(req).then(c => c || caches.match("./index.html")))
+      );
+      return;
+    }
+    // Other same-origin assets (icons, manifest): cache-first, then network.
     e.respondWith(
       caches.match(req).then(cached =>
         cached ||
