@@ -171,7 +171,6 @@
     align-items: center;
     gap: 10px;
     pointer-events: none;
-    background: linear-gradient(to top, rgba(231, 233, 236, 0.92), rgba(231, 233, 236, 0));
   }
   .dock > * { pointer-events: auto; }
 
@@ -733,6 +732,16 @@
     background: rgba(255, 255, 255, 0.7) !important;
   }
 
+  /* Mapy.com required logo (shown over their satellite tiles) */
+  .mapy-logo {
+    background: rgba(255, 255, 255, 0.85);
+    border-radius: 6px;
+    padding: 3px 6px;
+    line-height: 0;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  }
+  .mapy-logo img { height: 18px; display: block; }
+
   @media (prefers-reduced-motion: reduce) {
     .beacon .core::after,
     .pin.me .ring,
@@ -870,6 +879,14 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // dashboard so others can't burn your quota. Leave the placeholder to use the
 // free CARTO/Esri fallback tiles instead.
 const MAPTILER_KEY = "uGAbEXrhzvH76p30jBpO";
+
+// Free Mapy.com key for satellite ("letecká") imagery — far sharper over
+// Czechia/Slovakia/Central Europe than Esri or MapTiler (aerial reaches z20 in
+// CZ, z19 in SK/AT/PL/SI/FR/CH; the rest of the world only to z13). Get one at
+// https://developer.mapy.com/ . Publishable client key — restrict it to your
+// domain. Their terms REQUIRE showing the Mapy.com logo (handled below). Leave
+// the placeholder to fall back to MapTiler hybrid / Esri imagery.
+const MAPY_KEY = "Vt_nC4xD7EGomB4ihNbDJQ91RBsykmRvnFB8zO6e6n4";
 
 const TABLE = "locations";
 const REFRESH_MS = 20000;   // fallback poll; Supabase Realtime drives instant updates
@@ -1035,7 +1052,24 @@ function makeStreetLayer() {
     subdomains: "abcd", maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO',
   });
 }
+const hasMapy = MAPY_KEY && MAPY_KEY !== "PASTE_YOUR_MAPY_KEY_HERE";
+function mapyLayer(mapset, extra) {
+  return L.tileLayer(
+    "https://api.mapy.com/v1/maptiles/" + mapset + "/256/{z}/{x}/{y}?apikey=" + MAPY_KEY,
+    Object.assign({ maxZoom: 20, maxNativeZoom: 20,
+      attribution: '<a href="https://api.mapy.com/copyright" target="_blank">&copy; Seznam.cz a.s. a další</a>' }, extra)
+  );
+}
 function makeSatelliteLayer() {
+  // Mapy.com "letecká": clean aerial imagery + a transparent labels overlay on
+  // top, so it reads like a hybrid (imagery WITH road/place names). zIndex keeps
+  // the labels above the imagery regardless of add order.
+  if (hasMapy) {
+    return L.layerGroup([
+      mapyLayer("aerial", { zIndex: 1 }),
+      mapyLayer("names-overlay", { zIndex: 2 }),
+    ]);
+  }
   // "hybrid" = satellite imagery WITH road/place labels — real photography, so it's
   // geographically accurate (unlike the OSM-drawn street map). maxNativeZoom
   // upscales the deepest image instead of going blank at very high zoom.
@@ -1054,23 +1088,44 @@ let baseLayer = (baseMode === "satellite" ? makeSatelliteLayer() : makeStreetLay
 
 let tileWarned = false;
 function watchTileErrors(layer) {
-  layer.on("tileerror", () => {
+  // The Mapy satellite layer is a LayerGroup — bind to each tile sublayer.
+  const onErr = () => {
     if (tileWarned) return;
     tileWarned = true;
     toast("Map tiles are blocked in this view. They'll load on a hosted page.", true);
-  });
+  };
+  if (layer.eachLayer) layer.eachLayer(l => l.on("tileerror", onErr));
+  else layer.on("tileerror", onErr);
 }
 watchTileErrors(baseLayer);
+
+// Mapy.com terms require their logo be visible (and clickable) whenever their
+// tiles are shown. Toggle it with the satellite base mode.
+const mapyLogo = L.control({ position: "bottomleft" });
+mapyLogo.onAdd = function () {
+  const div = L.DomUtil.create("div", "mapy-logo");
+  div.innerHTML = '<a href="https://mapy.com/" target="_blank" rel="noopener">' +
+    '<img src="https://api.mapy.com/img/api/logo-small.svg" alt="Mapy.com"></a>';
+  L.DomEvent.disableClickPropagation(div);
+  return div;
+};
+function syncMapyLogo() {
+  const show = hasMapy && baseMode === "satellite";
+  if (show) mapyLogo.addTo(map);
+  else map.removeControl(mapyLogo);
+}
 
 function setBaseMode(mode) {
   baseMode = mode;
   try { localStorage.setItem(BASE_KEY, mode); } catch {}
   map.removeLayer(baseLayer);
   baseLayer = (mode === "satellite" ? makeSatelliteLayer() : makeStreetLayer()).addTo(map);
-  baseLayer.bringToBack();
+  if (baseLayer.bringToBack) baseLayer.bringToBack();
   watchTileErrors(baseLayer);
+  syncMapyLogo();
   paintBaseToggle();
 }
+syncMapyLogo();
 function toggleBase() { setBaseMode(baseMode === "satellite" ? "street" : "satellite"); }
 function paintBaseToggle() {
   const btn = document.getElementById("baseToggle");
