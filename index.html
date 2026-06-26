@@ -723,8 +723,8 @@
   .pop-del.armed { background: #ef4444; color: #fff; border-color: #ef4444; }
   .pop-del:active { transform: scale(0.98); }
 
-  /* satellite imagery shown in full colour so the pin can be checked against
-     real rooftops (grayscale was for the old abstract basemap) */
+  /* base map shown in full colour (Voyager) — pins and the accuracy halo
+     keep their own colour on top */
 
   .leaflet-control-attribution {
     font-size: 9px;
@@ -994,11 +994,12 @@ function setOnboarded() {
 const map = L.map("map", { zoomControl: false, attributionControl: true })
   .setView([48.15, 17.11], 6);   // Central Europe default
 
-// Satellite imagery (Esri World Imagery) — used so you can see whether your pin
-// lands on the right building. Note the {z}/{y}/{x} order (Esri's, not CARTO's).
-const tiles = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-  maxZoom: 19,
-  attribution: 'Tiles &copy; Esri, Maxar, Earthstar Geographics',
+// CARTO Voyager — a detailed, colourful Google-Maps-style street map. Free, no
+// API key. {r} serves @2x tiles on retina screens so labels stay crisp.
+const tiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+  subdomains: "abcd",
+  maxZoom: 20,
+  attribution: '&copy; OpenStreetMap &copy; CARTO',
 }).addTo(map);
 
 let tileWarned = false;
