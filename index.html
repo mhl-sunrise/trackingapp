@@ -1673,6 +1673,26 @@ document.getElementById("baseToggle").addEventListener("click", toggleBase);
   apply();
 })();
 
+/* ---------- keep the map filling the viewport (iOS) ----------
+   iOS Safari changes the visual viewport height when its toolbars collapse /
+   expand and on rotation. Leaflet only measures its container once, so the
+   strip revealed at the bottom otherwise stays blank (grey, no tiles). Nudge
+   Leaflet to re-measure on those events (rAF-throttled) and a few times right
+   after load while the toolbar height settles. */
+(function keepMapSized() {
+  let t = 0;
+  const fix = () => {
+    clearTimeout(t);
+    t = setTimeout(() => map.invalidateSize({ animate: false }), 60);
+  };
+  window.addEventListener("resize", fix);
+  window.addEventListener("orientationchange", fix);
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", fix);
+  window.addEventListener("load", fix);
+  window.addEventListener("pageshow", fix);
+  [150, 400, 900].forEach(ms => setTimeout(() => map.invalidateSize({ animate: false }), ms));
+})();
+
 /* ---------- init ---------- */
 ensureChannel();                    // give them a code to share if they create
 registerChannel(getChannel());      // make sure the active channel is in the list
