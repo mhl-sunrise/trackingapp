@@ -1219,9 +1219,12 @@ function makeSatelliteLayer() {
   // geographically accurate (unlike the OSM-drawn street map). maxNativeZoom
   // upscales the deepest image instead of going blank at very high zoom.
   if (hasMaptiler) return maptilerLayer("hybrid", "jpg", { maxNativeZoom: 20 });
-  // Free fallback — Esri World Imagery.
+  // Free fallback — Esri World Imagery. It has no @2x endpoint, so detectRetina
+  // pulls deeper native tiles on high-DPI screens to roughly double the pixel
+  // density (the MapTiler/CARTO paths already serve @2x and don't need this).
   return L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-    maxZoom: 20, maxNativeZoom: 19, attribution: 'Tiles &copy; Esri, Maxar, Earthstar Geographics',
+    maxZoom: 20, maxNativeZoom: 19, detectRetina: true,
+    attribution: 'Tiles &copy; Esri, Maxar, Earthstar Geographics',
   });
 }
 
