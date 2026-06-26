@@ -864,6 +864,13 @@
 const SUPABASE_URL = "https://qqgeykgjmhgogcxosnwz.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxZ2V5a2dqbWhnb2djeG9zbnd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyNjI4NjcsImV4cCI6MjA5NzgzODg2N30.Pzuza33yvcyXN_p7X6AS4r582AS88TOS2eR42P3Ua9Y";   // anon public
 
+// Free MapTiler key (no credit card) for sharper, deeper-zoom street & satellite
+// tiles. Get one at https://cloud.maptiler.com/ . This is a public/publishable
+// key — safe to ship in client code; restrict it to your domain in the MapTiler
+// dashboard so others can't burn your quota. Leave the placeholder to use the
+// free CARTO/Esri fallback tiles instead.
+const MAPTILER_KEY = "ibn6AYpjiZ9b5vvCkI7o";
+
 const TABLE = "locations";
 const REFRESH_MS = 20000;   // fallback poll; Supabase Realtime drives instant updates
 
@@ -1008,15 +1015,32 @@ const map = L.map("map", { zoomControl: false, attributionControl: true })
 // coordinates regardless of which base map is shown. Satellite is the more
 // geographically accurate of the two where OpenStreetMap data is sparse/misplaced.
 const BASE_KEY = "beacon_basemap";
+// With a Mapbox token we use Mapbox's higher-res, deeper-zoom tiles for both
+// modes; without one we fall back to the free CARTO/Esri tiles so the app still
+// works out of the box.
+const hasMaptiler = MAPTILER_KEY && MAPTILER_KEY !== "PASTE_YOUR_MAPTILER_KEY_HERE";
+function maptilerLayer(styleId, ext, extra) {
+  // 512px @2x tiles (tileSize 512 + zoomOffset -1) stay crisp on phones and zoom
+  // deep without the coverage gaps the free Esri imagery has.
+  return L.tileLayer(
+    "https://api.maptiler.com/maps/" + styleId + "/{z}/{x}/{y}@2x." + ext + "?key=" + MAPTILER_KEY,
+    Object.assign({ tileSize: 512, zoomOffset: -1, maxZoom: 22,
+      attribution: '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; OpenStreetMap' }, extra)
+  );
+}
 function makeStreetLayer() {
-  // {r} serves @2x tiles on retina screens so labels stay crisp.
+  if (hasMaptiler) return maptilerLayer("streets-v2", "png", {});
+  // Free fallback — CARTO Voyager. {r} serves @2x tiles on retina screens.
   return L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
     subdomains: "abcd", maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO',
   });
 }
 function makeSatelliteLayer() {
-  // maxNativeZoom upscales the deepest available image past z19 instead of showing
-  // Esri's "Map data not yet available" placeholder.
+  // "hybrid" = satellite imagery WITH road/place labels — real photography, so it's
+  // geographically accurate (unlike the OSM-drawn street map). maxNativeZoom
+  // upscales the deepest image instead of going blank at very high zoom.
+  if (hasMaptiler) return maptilerLayer("hybrid", "jpg", { maxNativeZoom: 20 });
+  // Free fallback — Esri World Imagery.
   return L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
     maxZoom: 20, maxNativeZoom: 19, attribution: 'Tiles &copy; Esri, Maxar, Earthstar Geographics',
   });
