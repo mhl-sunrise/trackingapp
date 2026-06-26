@@ -129,6 +129,8 @@
   }
   .icon-btn svg { width: 19px; height: 19px; }
   .icon-btn.spinning svg { animation: spin 0.8s linear infinite; }
+  /* satellite mode is on — highlight the base-map toggle */
+  .icon-btn.is-sat { background: var(--signal); border-color: var(--signal); }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* ---------- setup banner ---------- */
@@ -758,6 +760,11 @@
       </svg>
       <span class="who" id="mapLabel">···</span>
     </button>
+    <button class="icon-btn" id="baseToggle" aria-label="Switch base map">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>
+      </svg>
+    </button>
     <button class="icon-btn" id="refreshBtn" aria-label="Refresh map">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>
@@ -994,20 +1001,61 @@ function setOnboarded() {
 const map = L.map("map", { zoomControl: false, attributionControl: true })
   .setView([48.15, 17.11], 6);   // Central Europe default
 
-// CARTO Voyager — a detailed, colourful Google-Maps-style street map. Free, no
-// API key. {r} serves @2x tiles on retina screens so labels stay crisp.
-const tiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-  subdomains: "abcd",
-  maxZoom: 20,
-  attribution: '&copy; OpenStreetMap &copy; CARTO',
-}).addTo(map);
+// Two free base maps the user can flip between with the toggle in the HUD:
+//   • street    — CARTO Voyager: detailed, labelled, colourful (best free street map)
+//   • satellite — Esri World Imagery: real aerial photography (best free, no key)
+// Tiles only change how the world is *drawn* — a pin always sits at the same GPS
+// coordinates regardless of which base map is shown. Satellite is the more
+// geographically accurate of the two where OpenStreetMap data is sparse/misplaced.
+const BASE_KEY = "beacon_basemap";
+function makeStreetLayer() {
+  // {r} serves @2x tiles on retina screens so labels stay crisp.
+  return L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+    subdomains: "abcd", maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO',
+  });
+}
+function makeSatelliteLayer() {
+  // maxNativeZoom upscales the deepest available image past z19 instead of showing
+  // Esri's "Map data not yet available" placeholder.
+  return L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+    maxZoom: 20, maxNativeZoom: 19, attribution: 'Tiles &copy; Esri, Maxar, Earthstar Geographics',
+  });
+}
+
+function storedBaseMode() {
+  try { return localStorage.getItem(BASE_KEY) || "street"; } catch { return "street"; }
+}
+let baseMode = storedBaseMode();
+let baseLayer = (baseMode === "satellite" ? makeSatelliteLayer() : makeStreetLayer()).addTo(map);
 
 let tileWarned = false;
-tiles.on("tileerror", () => {
-  if (tileWarned) return;
-  tileWarned = true;
-  toast("Map tiles are blocked in this view. They'll load on a hosted page.", true);
-});
+function watchTileErrors(layer) {
+  layer.on("tileerror", () => {
+    if (tileWarned) return;
+    tileWarned = true;
+    toast("Map tiles are blocked in this view. They'll load on a hosted page.", true);
+  });
+}
+watchTileErrors(baseLayer);
+
+function setBaseMode(mode) {
+  baseMode = mode;
+  try { localStorage.setItem(BASE_KEY, mode); } catch {}
+  map.removeLayer(baseLayer);
+  baseLayer = (mode === "satellite" ? makeSatelliteLayer() : makeStreetLayer()).addTo(map);
+  baseLayer.bringToBack();
+  watchTileErrors(baseLayer);
+  paintBaseToggle();
+}
+function toggleBase() { setBaseMode(baseMode === "satellite" ? "street" : "satellite"); }
+function paintBaseToggle() {
+  const btn = document.getElementById("baseToggle");
+  if (!btn) return;
+  const sat = baseMode === "satellite";
+  btn.classList.toggle("is-sat", sat);
+  // label names the map you'll switch TO
+  btn.setAttribute("aria-label", sat ? "Switch to street map" : "Switch to satellite imagery");
+}
 L.control.zoom({ position: "bottomright" }).addTo(map);
 
 let markers = {};   // name -> L.marker
@@ -1585,6 +1633,7 @@ document.getElementById("refreshBtn").addEventListener("click", () => {
   b.classList.add("spinning");
   refresh(true).finally(() => setTimeout(() => b.classList.remove("spinning"), 600));
 });
+document.getElementById("baseToggle").addEventListener("click", toggleBase);
 
 /* ---------- keep sheets above the on-screen keyboard ----------
    When a mobile keyboard opens it shrinks the visual viewport. We publish that
@@ -1606,6 +1655,7 @@ ensureChannel();                    // give them a code to share if they create
 registerChannel(getChannel());      // make sure the active channel is in the list
 paintChip();
 paintChannel();
+paintBaseToggle();
 if (!configured) document.getElementById("setupBanner").style.display = "block";
 // Until the user has explicitly picked a map (created or joined), force the
 // picker open — it can't be dismissed, and it stays gone once they commit, even
