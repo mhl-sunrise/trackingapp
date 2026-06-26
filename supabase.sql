@@ -73,6 +73,36 @@ create policy "beacon delete" on public.locations for delete using (true);
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- C. AUTO-EXPIRE PINS — delete rows older than 24h on a schedule (pg_cron).
+--    Run this once. The job then runs entirely inside Postgres — no app code,
+--    no server. (You can also manage this from Dashboard → Database → Cron Jobs.)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- 1. Enable the in-database scheduler (safe to run if it's already enabled).
+create extension if not exists pg_cron;
+
+-- 2. An index on recorded_at keeps each purge fast as the table grows.
+create index if not exists locations_recorded_at_idx
+  on public.locations (recorded_at);
+
+-- 3. Schedule the cleanup. The job runs as a privileged role, so RLS doesn't
+--    block it. Re-running with the same job name UPDATES the existing job, so
+--    this is safe to run again. Every 15 min → a pin is gone within ~15 min of
+--    crossing the 24-hour mark.
+select cron.schedule(
+  'beacon-purge-stale-pins',
+  '*/15 * * * *',
+  $$ delete from public.locations where recorded_at < now() - interval '24 hours' $$
+);
+
+-- Handy checks / changes:
+--   confirm it's registered:   select * from cron.job;
+--   see recent runs:           select * from cron.job_run_details order by start_time desc limit 10;
+--   change the window:         edit the interval in step 3 and re-run it
+--   stop auto-expiry:          select cron.unschedule('beacon-purge-stale-pins');
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Security note
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Channels keep groups from seeing each other's pins in normal use, but they are
