@@ -1033,12 +1033,6 @@
   </div>
 </div>
 
-<!-- Disable Leaflet's per-tile 3D/GPU layers. On fractional-DPR phones (e.g. 2.625)
-     translate3d puts each tile on its own composited layer at a sub-pixel offset,
-     leaving a ~1px anti-aliased fade at every tile edge — the white seams. 2D
-     positioning renders tiles on one shared surface, so the seams disappear.
-     Must be set BEFORE leaflet.js runs (it reads the flag into L.Browser.any3d). -->
-<script>window.L_DISABLE_3D = true;</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"
         integrity="sha512-BwHfrr4c9kmRkLw6iXFdzcdWV/PGkVgiIyIWLLlTSXzWQzxuSg4DiQUCpauz/EWjgk5TYQqX/kvn9pG1NpYfqg=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
