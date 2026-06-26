@@ -1305,26 +1305,15 @@ function renderMarkers(rows) {
   return bounds;
 }
 
-// Schema-capability flags. We assume the newest columns exist and fall back the
-// first time the API reports one missing, so the app also works on older tables
-// (see supabase.sql for the migration that adds them).
-let hasChannelCol = true;
-let hasAccuracyCol = true;
 let didFit = false;
 let seenAt = {};          // name -> last recorded_at (ms) seen, for new-pin detection
 let notifyPrimed = false; // first load of a map seeds state without firing alerts
 let rtChannel = null;     // active Supabase Realtime subscription
 async function refresh(fit = false) {
   if (!sb) return;
-  // Only load pins for this device's channel, so groups sharing one table don't
-  // see each other's markers. Falls back to the whole table pre-migration.
-  let res = await (hasChannelCol
-    ? sb.from(TABLE).select("*").eq("channel", getChannel())
-    : sb.from(TABLE).select("*"));
-  if (res.error && hasChannelCol && isMissingColumn(res.error, "channel")) {
-    hasChannelCol = false;
-    res = await sb.from(TABLE).select("*");
-  }
+  // Pins are fetched through a server-side function that requires the map code,
+  // so the table itself is never exposed (see supabase.sql).
+  const res = await sb.rpc("list_pins", { p_channel: getChannel() });
   if (res.error) { toast("Couldn't load locations. Check your connection.", true); return; }
   const rows = res.data || [];
   maybeNotify(rows);
@@ -1355,14 +1344,21 @@ function maybeNotify(rows) {
 // Listen for live inserts/updates on this map and refresh instantly, instead of
 // waiting for the next poll. Needs Realtime enabled on the table in Supabase;
 // if it isn't, the periodic poll below still keeps things current.
+// Live updates use Realtime Broadcast (pub/sub) on a topic named after the map
+// code, rather than postgres_changes — the table is locked down, so there's no
+// row-level read for change-streams to use. Anyone with the code joins the topic
+// and gets a nudge to refresh when a peer saves or removes a pin.
 function subscribeRealtime() {
   if (!sb) return;
   if (rtChannel) { try { sb.removeChannel(rtChannel); } catch (e) {} rtChannel = null; }
-  const opts = { event: "*", schema: "public", table: TABLE };
-  if (hasChannelCol) opts.filter = "channel=eq." + getChannel();
-  rtChannel = sb.channel("rt-" + getChannel())
-    .on("postgres_changes", opts, () => refresh())
+  rtChannel = sb.channel("map-" + getChannel(), { config: { broadcast: { self: false } } })
+    .on("broadcast", { event: "pin" }, () => refresh())
     .subscribe();
+}
+// Tell peers on this map that something changed, so they refresh immediately.
+function broadcastChange() {
+  if (!rtChannel) return;
+  try { rtChannel.send({ type: "broadcast", event: "pin", payload: {} }); } catch (e) {}
 }
 
 /* ---------- logging ---------- */
@@ -1428,25 +1424,18 @@ function getBestPosition(onProgress) {
   });
 }
 
-// Save the fix. The row carries the channel and accuracy when those columns
-// exist; if the API reports one missing we drop it and retry, so the app keeps
-// working on tables that predate the migration (see supabase.sql).
+// Save the fix through the server-side function, which validates the inputs and
+// writes the row as the table owner (see supabase.sql).
 async function saveLocation(name, latitude, longitude, accuracy) {
-  for (;;) {
-    const row = { name, latitude, longitude, recorded_at: new Date().toISOString() };
-    if (hasChannelCol) row.channel = getChannel();
-    if (hasAccuracyCol && typeof accuracy === "number") row.accuracy = accuracy;
-    const { error } = await sb.from(TABLE).upsert(row, { onConflict: hasChannelCol ? "name,channel" : "name" });
-    if (!error) return null;
-    if (hasChannelCol && isMissingColumn(error, "channel")) { hasChannelCol = false; continue; }
-    if (hasAccuracyCol && isMissingColumn(error, "accuracy")) { hasAccuracyCol = false; continue; }
-    return error;
-  }
-}
-
-function isMissingColumn(error, col) {
-  const msg = ((error.message || "") + " " + (error.details || "")).toLowerCase();
-  return error.code === "PGRST204" || (msg.includes(col) && (msg.includes("column") || msg.includes("schema cache")));
+  const { error } = await sb.rpc("upsert_pin", {
+    p_name: name,
+    p_channel: getChannel(),
+    p_lat: latitude,
+    p_lon: longitude,
+    p_acc: typeof accuracy === "number" ? accuracy : null,
+  });
+  if (!error) broadcastChange();
+  return error;
 }
 
 /* ---------- in-app notifications (no server, no ntfy) ----------
@@ -1539,24 +1528,12 @@ function armOrDelete(btn) {
 async function deleteMyPin() {
   const name = getName();
   if (!sb || !name) return;
-  const run = withChannel => {
-    let q = sb.from(TABLE).delete().eq("name", name);
-    if (withChannel) q = q.eq("channel", getChannel());
-    return q.select();
-  };
-  let { data, error } = await run(hasChannelCol);
-  if (error && hasChannelCol && isMissingColumn(error, "channel")) {
-    hasChannelCol = false;
-    ({ data, error } = await run(false));
-  }
-  if (error) { toast("Couldn't remove your pin. Check your table's access rules.", true); return; }
-  if (!data || data.length === 0) {
-    toast("Couldn't remove — add the delete policy from supabase.sql.", true);
-    return;
-  }
+  const { error } = await sb.rpc("delete_pin", { p_name: name, p_channel: getChannel() });
+  if (error) { toast("Couldn't remove your pin. Try again.", true); return; }
   if (markers[name]) { map.removeLayer(markers[name]); delete markers[name]; }
   if (accCircle) { map.removeLayer(accCircle); accCircle = null; }
   toast("Your pin was removed.");
+  broadcastChange();
   refresh();
 }
 
