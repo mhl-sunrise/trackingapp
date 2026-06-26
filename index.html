@@ -620,6 +620,11 @@
   .leaflet-tile {
     width: calc(var(--tile-size, 512px) + 1px) !important;
     height: calc(var(--tile-size, 512px) + 1px) !important;
+    /* Leaflet 1.9 ships mix-blend-mode: plus-lighter on tiles to fuse abutting
+       AA edges. With our 1px OVERLAP that turns additive — it brightens the
+       overlap strip into a white line. Force normal blend so the overlapping
+       opaque tile simply covers the seam. */
+    mix-blend-mode: normal !important;
   }
   /* mobile: the zoom buttons sit right under the Log button and collide with it,
      so hide them — pinch-to-zoom covers it on touch devices anyway */
