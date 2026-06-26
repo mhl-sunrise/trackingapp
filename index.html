@@ -709,18 +709,19 @@
   .pop-del {
     display: block;
     width: 100%;
-    margin-top: 10px;
-    padding: 7px 10px;
-    border: 1px solid rgba(239, 68, 68, 0.5);
-    border-radius: 9px;
-    background: rgba(239, 68, 68, 0.12);
-    color: #ffb4b4;
+    margin-top: 12px;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--muted);
     font-family: var(--ui);
-    font-size: 12.5px;
+    font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.12s ease, color 0.12s ease;
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
   }
+  .pop-del:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
   .pop-del.armed { background: #ef4444; color: #fff; border-color: #ef4444; }
   .pop-del:active { transform: scale(0.98); }
 
@@ -746,19 +747,14 @@
 <div id="map"></div>
 
 <div class="hud">
-  <button class="chip unset" id="nameChip" aria-label="Set or change your name">
-    <span class="live-dot"></span>
-    <span class="who" id="whoLabel">Set name</span>
-    <span class="edit">✎</span>
+  <button class="chip map-chip" id="mapChip" aria-label="Current map — tap to change name or switch map">
+    <svg class="map-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M20 10c0 6-8 11-8 11s-8-5-8-11a8 8 0 0 1 16 0Z"/>
+      <circle cx="12" cy="10" r="2.6"/>
+    </svg>
+    <span class="who" id="mapLabel">···</span>
   </button>
   <div class="hud-actions">
-    <button class="chip map-chip" id="mapChip" aria-label="Current map — tap to change">
-      <svg class="map-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M20 10c0 6-8 11-8 11s-8-5-8-11a8 8 0 0 1 16 0Z"/>
-        <circle cx="12" cy="10" r="2.6"/>
-      </svg>
-      <span class="who" id="mapLabel">···</span>
-    </button>
     <button class="icon-btn" id="baseToggle" aria-label="Switch base map">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>
@@ -790,7 +786,7 @@
   <div class="grip"></div>
   <h2 id="sheetTitle">What's your name?</h2>
   <input id="nameInput" type="text" inputmode="text" autocomplete="off" autocapitalize="words"
-         placeholder="Martin" maxlength="40" />
+         placeholder="Insert name" maxlength="40" />
   <div class="err" id="nameErr"></div>
   <button class="confirm" id="nameConfirm">Start sharing</button>
 </div>
@@ -808,7 +804,7 @@
     <div class="cc-label name-label">Your name</div>
     <div class="chan-field">
       <input id="chanName" type="text" inputmode="text" autocomplete="off" autocapitalize="words"
-             spellcheck="false" placeholder="Martin" maxlength="40" />
+             spellcheck="false" placeholder="Insert name" maxlength="40" />
     </div>
     <div class="err" id="chanNameErr"></div>
   </div>
@@ -910,6 +906,7 @@ function paintChip() {
   const n = getName();
   const chip = document.getElementById("nameChip");
   const label = document.getElementById("whoLabel");
+  if (!chip || !label) return;   // name chip was removed from the HUD
   if (n) {
     chip.classList.remove("unset");
     label.innerHTML = "<b>" + escapeHtml(n) + "</b>";
@@ -1612,7 +1609,6 @@ function escapeHtml(s) {
 
 /* ---------- wire up ---------- */
 document.getElementById("logBtn").addEventListener("click", logLocation);
-document.getElementById("nameChip").addEventListener("click", () => openSheet(!!getName()));
 document.getElementById("nameConfirm").addEventListener("click", confirmName);
 document.getElementById("nameInput").addEventListener("keydown", e => { if (e.key === "Enter") confirmName(); });
 // The channel sheet must be dismissed by creating or joining a map — not by
