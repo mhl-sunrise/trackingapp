@@ -792,16 +792,33 @@
     font-family: var(--ui); font-size: 14px; font-weight: 700;
   }
   .ig-ic { width: 18px; height: 18px; flex: none; vertical-align: -4px; }
+  .ig-opt { width: 100%; display: none; flex-direction: column; align-items: stretch; }
+  .ig-opt.open { display: flex; }
+  .ig-lead {
+    font-family: var(--ui); font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.07em; color: var(--signal);
+    margin-bottom: 9px;
+  }
   .ig-install {
     width: 100%; height: 52px; border: none; border-radius: 14px;
     background: var(--signal); color: #fff; font-family: var(--ui);
-    font-size: 16px; font-weight: 600; cursor: pointer; margin-bottom: 16px;
+    font-size: 16px; font-weight: 600; cursor: pointer;
   }
-  .ig-skip {
-    margin-top: 18px; background: none; border: none; color: var(--muted);
-    font-family: var(--ui); font-size: 13.5px; text-decoration: underline;
-    cursor: pointer; padding: 8px;
+  /* labelled "or" divider between the alternative paths */
+  .ig-div {
+    display: flex; align-items: center; gap: 12px; width: 100%;
+    margin: 20px 0 14px; color: var(--muted); font-family: var(--ui);
+    font-size: 11.5px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.07em;
   }
+  .ig-div::before, .ig-div::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .ig-div span { white-space: nowrap; }
+  .ig-ghost {
+    width: 100%; height: 50px; border: 1px solid var(--line); border-radius: 14px;
+    background: rgba(255, 255, 255, 0.03); color: #fff; font-family: var(--ui);
+    font-size: 15px; font-weight: 600; cursor: pointer;
+  }
+  .ig-ghost:active { background: rgba(255, 255, 255, 0.08); }
 </style>
 </head>
 <body>
@@ -813,6 +830,15 @@
     <img class="ig-icon" src="icon-192.png" alt="Beacon" width="76" height="76" />
     <h1 class="ig-title">Install Beacon</h1>
     <p class="ig-sub">Add Beacon to your home screen for live location alerts and a full-screen map. On iPhone, notifications only work once it's installed.</p>
+
+    <!-- Path 1: one-tap native install (Android/Chrome only, once the browser offers it) -->
+    <div class="ig-opt" id="igOptQuick">
+      <div class="ig-lead">Recommended</div>
+      <button class="ig-install" id="igInstallBtn" type="button">Install Beacon</button>
+    </div>
+
+    <!-- Path 2: manual add-to-home-screen (always available; the only path on iOS) -->
+    <div class="ig-div"><span id="igManualLabel">Add to Home Screen</span></div>
 
     <div class="ig-steps" id="igStepsIos">
       <div class="ig-step">
@@ -833,7 +859,6 @@
     </div>
 
     <div class="ig-steps" id="igStepsAndroid">
-      <button class="ig-install" id="igInstallBtn" style="display:none">Install Beacon</button>
       <div class="ig-step">
         <span class="ig-num">1</span>
         <span>Tap the <b>⋮</b> menu in Chrome (top-right).</span>
@@ -848,7 +873,9 @@
       </div>
     </div>
 
-    <button class="ig-skip" id="igSkip" type="button">Continue in browser</button>
+    <!-- Path 3: skip installing -->
+    <div class="ig-div"><span>or</span></div>
+    <button class="ig-ghost" id="igSkip" type="button">Continue in browser</button>
   </div>
 </div>
 
@@ -870,12 +897,13 @@
   document.documentElement.style.overflow = "hidden";
 
   if (isAndroid) {
-    // Chrome can offer a one-tap native install; capture the event and surface a button.
+    // Chrome can offer a one-tap native install; capture the event and surface the
+    // "Recommended" path. Until it fires, only the manual + browser paths are shown.
     window.addEventListener("beforeinstallprompt", function (e) {
       e.preventDefault();
-      var btn = document.getElementById("igInstallBtn");
-      btn.style.display = "block";
-      btn.onclick = function () { e.prompt(); };
+      document.getElementById("igOptQuick").classList.add("open");
+      document.getElementById("igManualLabel").textContent = "Or add it manually";
+      document.getElementById("igInstallBtn").onclick = function () { e.prompt(); };
     });
     window.addEventListener("appinstalled", function () { gate.classList.remove("open"); });
   }
