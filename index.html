@@ -2,6 +2,24 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
+<!-- Content Security Policy: limits where scripts/styles/data may come from and
+     where the page may connect, as defence-in-depth against injection. Inline
+     script/style is allowed because the app ships as a single file; the actual
+     XSS sink (DB-sourced names) is neutralised by escaping at render time. -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net;
+  style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com;
+  img-src 'self' data: blob: https:;
+  font-src 'self' data:;
+  connect-src 'self' https://*.supabase.co wss://*.supabase.co;
+  worker-src 'self';
+  manifest-src 'self';
+  object-src 'none';
+  base-uri 'self';
+  form-action 'self';
+  upgrade-insecure-requests;
+" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
 <meta name="theme-color" content="#0E1116" />
 <title>Beacon</title>
@@ -15,7 +33,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Beacon" />
 
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"
+      integrity="sha512-Zcn6bjR/8RZbLEpLIeOwNtzREBAJnUKESxces60Mpoj+2okopSAcSUIUOseddDm0cxnGQzxIR7vJgsLZbdLE3w=="
+      crossorigin="anonymous" referrerpolicy="no-referrer" />
 
 <style>
   :root {
@@ -849,8 +869,12 @@
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"
+        integrity="sha512-BwHfrr4c9kmRkLw6iXFdzcdWV/PGkVgiIyIWLLlTSXzWQzxuSg4DiQUCpauz/EWjgk5TYQqX/kvn9pG1NpYfqg=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.2/dist/umd/supabase.js"
+        integrity="sha512-WcMMSCwT8aaj6DPLIGd2ORT1LP5nTTh90SYQOsRqHSUyboFqwCh7sj4C/eykSCG9Dqi7YUPU6T9+zXO87boAbQ=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
 <script>
 /* ============================================================
@@ -1127,7 +1151,9 @@ function renderMarkers(rows) {
       markers[r.name].getPopup() && markers[r.name].setPopupContent(popup);
     } else {
       const m = L.marker(ll, { icon: isMe ? meIcon() : otherIcon() }).addTo(map);
-      m.bindTooltip(r.name, { permanent: true, direction: "top", offset: [0, -10],
+      // Leaflet renders a string tooltip as HTML — escape the (DB-sourced,
+      // attacker-controllable) name to prevent stored XSS.
+      m.bindTooltip(escapeHtml(r.name), { permanent: true, direction: "top", offset: [0, -10],
         className: "tag" + (isMe ? " tag-me" : "") });
       m.bindPopup(popup);
       markers[r.name] = m;
