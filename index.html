@@ -816,11 +816,10 @@
     <div class="cc-label">Your map code</div>
     <div class="chan-topic">
       <code id="chanTopicCode">···</code>
+      <button id="chanNewBtn" type="button">+ New</button>
       <button id="chanCopyBtn" type="button">Copy</button>
     </div>
     <div class="cc-hint">Anyone you share this code with joins your map.</div>
-
-    <button class="confirm ghost" id="chanNewBtn" type="button">+ New map code</button>
 
     <div class="chan-switch" id="chanSwitch" hidden>
       <div class="cc-label">Your maps</div>
@@ -835,7 +834,7 @@
     <div class="cc-label">Enter a code</div>
     <div class="chan-field">
       <input id="channelInput" class="code-input" type="text" inputmode="text" autocomplete="off" autocapitalize="characters"
-             spellcheck="false" placeholder="1BG-8H7-JK9" maxlength="13" />
+             spellcheck="false" placeholder="1BG-8H7" maxlength="13" />
     </div>
     <div class="err" id="channelErr"></div>
     <div class="cc-hint">Paste the code a friend shared with you.</div>
@@ -865,10 +864,11 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const TABLE = "locations";
 const REFRESH_MS = 20000;   // fallback poll; Supabase Realtime drives instant updates
 
-// Pins and alerts are grouped into "maps". A map is just a shared 9-character
+// Pins and alerts are grouped into "maps". A map is just a shared 6-character
 // code; only people who have it see the same pins. It's shown grouped for
-// readability (e.g. 1BG-8H7-JK9) but stored/compared without the dashes.
-const CODE_LEN = 9;
+// readability (e.g. 1BG-8H7) but stored/compared without the dashes. Older
+// 9-character codes still work — only newly generated codes are this short.
+const CODE_LEN = 6;
 /* ============================================================ */
 
 const NAME_KEY = "beacon_name";
