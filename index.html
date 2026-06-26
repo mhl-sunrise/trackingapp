@@ -1153,18 +1153,26 @@ function subscribeRealtime() {
 let pendingLog = false;
 
 // A single getCurrentPosition returns the first fix available — often a coarse
-// network/Wi-Fi estimate delivered before the GPS receiver has locked. We instead
-// watch the position and keep the tightest fix, letting it converge.
+// network/Wi-Fi estimate delivered before the GPS receiver has locked. That early
+// estimate frequently *reports* a small accuracy (so it looks trustworthy) yet
+// sits tens of metres off the true GPS position. We watch the position, keep the
+// tightest fix, and — crucially — refuse to accept an early "good" fix until the
+// GPS chip has had a moment to engage and a second sample has corroborated it.
+// Without this, the app locks onto that first Wi-Fi guess and lands in the wrong
+// spot while Google Maps (which keeps fusing GPS) shows the right one.
 const ACCURACY_TARGET_M = 10;     // stop early once a fix is at least this good
 const SAMPLE_WINDOW_MS  = 30000;  // otherwise keep refining up to this long (GPS cold-start is slow)
 const SETTLE_MS         = 6000;   // stop early if it stops improving for this long...
-const SETTLE_GOOD_M     = 30;     // ...but only once we actually have a usable GPS-grade fix
+const SETTLE_GOOD_M     = 25;     // ...but only once we actually have a usable GPS-grade fix
+const WARMUP_MS         = 3500;   // ignore how good an early fix looks until GPS has had this long
+const MIN_SAMPLES       = 2;      // ...and until more than one fix agrees, so a lone Wi-Fi guess can't win
 
 function getBestPosition(onProgress) {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) { reject({ code: 0 }); return; }
 
-    let best = null, lastImprove = Date.now(), done = false;
+    let best = null, lastImprove = Date.now(), done = false, samples = 0;
+    const startedAt = Date.now();
     let watchId = null, hardStop = null, settleCheck = null;
 
     const cleanup = () => {
@@ -1174,15 +1182,21 @@ function getBestPosition(onProgress) {
     };
     const finish = () => { if (done) return; done = true; cleanup(); best ? resolve(best) : reject({ code: 3 }); };
     const fail = err => { if (done) return; done = true; cleanup(); reject(err); };
+    // GPS has had time to engage — past here an early stop won't lock onto the
+    // first coarse network fix.
+    const warmedUp = () => Date.now() - startedAt >= WARMUP_MS;
 
     watchId = navigator.geolocation.watchPosition(pos => {
+      samples++;
       const acc = pos.coords.accuracy ?? Infinity;
       if (!best || acc < (best.coords.accuracy ?? Infinity)) {
         best = pos;
         lastImprove = Date.now();
         onProgress && onProgress(acc);
       }
-      if (acc <= ACCURACY_TARGET_M) finish();          // good enough — stop now
+      // Stop early only for a GPS-grade fix that GPS has had time to produce and
+      // that more than one sample agrees on — never on the first instant fix.
+      if (acc <= ACCURACY_TARGET_M && samples >= MIN_SAMPLES && warmedUp()) finish();
     }, err => {
       if (!best) fail(err);                             // only abort if we have nothing yet
     }, { enableHighAccuracy: true, timeout: SAMPLE_WINDOW_MS, maximumAge: 0 });
@@ -1191,9 +1205,9 @@ function getBestPosition(onProgress) {
     settleCheck = setInterval(() => {
       // Don't bail out on the first coarse Wi-Fi/network fix — keep waiting for the
       // GPS chip to lock. Only settle early once we have a genuinely tight fix that
-      // has stopped improving.
+      // has stopped improving and GPS has had time to engage.
       const acc = best ? (best.coords.accuracy ?? Infinity) : Infinity;
-      if (best && acc <= SETTLE_GOOD_M && Date.now() - lastImprove > SETTLE_MS) finish();
+      if (best && acc <= SETTLE_GOOD_M && warmedUp() && Date.now() - lastImprove > SETTLE_MS) finish();
     }, 1000);
   });
 }
