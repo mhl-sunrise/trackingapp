@@ -760,9 +760,133 @@
     .beacon .mini-spin { animation: none; }
     .pin.me .ring { display: none; }
   }
+  /* ---------- install gate (mobile-browser only) ---------- */
+  .install-gate {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 5000;
+    padding: calc(env(safe-area-inset-top, 0px) + 28px) 20px calc(env(safe-area-inset-bottom, 0px) + 24px);
+    background: radial-gradient(125% 80% at 50% -10%, #1b2433 0%, #0b0e13 58%);
+    color: #fff;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .install-gate.open { display: flex; }
+  .ig-card { margin: auto; width: 100%; max-width: 380px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .ig-icon { width: 76px; height: 76px; border-radius: 18px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); margin-bottom: 18px; }
+  .ig-title { font-family: var(--ui); font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; }
+  .ig-sub { font-family: var(--ui); font-size: 14.5px; line-height: 1.5; color: var(--muted); margin: 0 0 22px; }
+  .ig-steps { display: none; width: 100%; }
+  .ig-steps.open { display: block; }
+  .ig-step {
+    display: flex; align-items: center; gap: 12px; text-align: left;
+    font-family: var(--ui); font-size: 14.5px; line-height: 1.4;
+    background: var(--chrome); border: 1px solid var(--line);
+    border-radius: 14px; padding: 14px 16px; margin-bottom: 10px;
+  }
+  .ig-step b { font-weight: 700; }
+  .ig-num {
+    flex: none; width: 26px; height: 26px; display: grid; place-items: center;
+    border-radius: 50%; background: var(--signal); color: #fff;
+    font-family: var(--ui); font-size: 14px; font-weight: 700;
+  }
+  .ig-ic { width: 18px; height: 18px; flex: none; vertical-align: -4px; }
+  .ig-install {
+    width: 100%; height: 52px; border: none; border-radius: 14px;
+    background: var(--signal); color: #fff; font-family: var(--ui);
+    font-size: 16px; font-weight: 600; cursor: pointer; margin-bottom: 16px;
+  }
+  .ig-skip {
+    margin-top: 18px; background: none; border: none; color: var(--muted);
+    font-family: var(--ui); font-size: 13.5px; text-decoration: underline;
+    cursor: pointer; padding: 8px;
+  }
 </style>
 </head>
 <body>
+
+<!-- Install gate: shown only in a mobile browser when not yet installed. The
+     inline script decides visibility immediately, before the app initialises. -->
+<div id="installGate" class="install-gate" role="dialog" aria-modal="true" aria-label="Install Beacon">
+  <div class="ig-card">
+    <img class="ig-icon" src="icon-192.png" alt="Beacon" width="76" height="76" />
+    <h1 class="ig-title">Install Beacon</h1>
+    <p class="ig-sub">Add Beacon to your home screen for live location alerts and a full-screen map. On iPhone, notifications only work once it's installed.</p>
+
+    <div class="ig-steps" id="igStepsIos">
+      <div class="ig-step">
+        <span class="ig-num">1</span>
+        <span>Tap the <b>Share</b> icon
+          <svg class="ig-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m8 8 4-4 4 4"/><path d="M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7"/></svg>
+          in Safari's toolbar.</span>
+      </div>
+      <div class="ig-step">
+        <span class="ig-num">2</span>
+        <span>Scroll down and tap <b>Add to Home Screen</b>
+          <svg class="ig-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></svg>.</span>
+      </div>
+      <div class="ig-step">
+        <span class="ig-num">3</span>
+        <span>Open <b>Beacon</b> from your home screen.</span>
+      </div>
+    </div>
+
+    <div class="ig-steps" id="igStepsAndroid">
+      <button class="ig-install" id="igInstallBtn" style="display:none">Install Beacon</button>
+      <div class="ig-step">
+        <span class="ig-num">1</span>
+        <span>Tap the <b>⋮</b> menu in Chrome (top-right).</span>
+      </div>
+      <div class="ig-step">
+        <span class="ig-num">2</span>
+        <span>Tap <b>Install app</b> or <b>Add to Home screen</b>.</span>
+      </div>
+      <div class="ig-step">
+        <span class="ig-num">3</span>
+        <span>Open <b>Beacon</b> from your home screen.</span>
+      </div>
+    </div>
+
+    <button class="ig-skip" id="igSkip" type="button">Continue in browser</button>
+  </div>
+</div>
+
+<script>
+(function installGate() {
+  var ua = navigator.userAgent || "";
+  var isIOS = /iphone|ipad|ipod/i.test(ua) ||
+              (/Macintosh/i.test(ua) && typeof document !== "undefined" && "ontouchend" in document);
+  var isAndroid = /android/i.test(ua);
+  if (!(isIOS || isAndroid)) return;                       // desktop → use the app directly
+  var standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+                   window.navigator.standalone === true;
+  if (standalone) return;                                  // already installed
+  try { if (sessionStorage.getItem("ig-skip") === "1") return; } catch (e) {}  // opted out this session
+
+  var gate = document.getElementById("installGate");
+  document.getElementById(isIOS ? "igStepsIos" : "igStepsAndroid").classList.add("open");
+  gate.classList.add("open");
+  document.documentElement.style.overflow = "hidden";
+
+  if (isAndroid) {
+    // Chrome can offer a one-tap native install; capture the event and surface a button.
+    window.addEventListener("beforeinstallprompt", function (e) {
+      e.preventDefault();
+      var btn = document.getElementById("igInstallBtn");
+      btn.style.display = "block";
+      btn.onclick = function () { e.prompt(); };
+    });
+    window.addEventListener("appinstalled", function () { gate.classList.remove("open"); });
+  }
+
+  document.getElementById("igSkip").onclick = function () {
+    try { sessionStorage.setItem("ig-skip", "1"); } catch (e) {}
+    gate.classList.remove("open");
+    document.documentElement.style.overflow = "";
+  };
+})();
+</script>
 
 <div id="map"></div>
 
